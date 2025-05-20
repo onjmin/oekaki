@@ -1,5 +1,5 @@
 # oekaki
-レイヤー概念があるお絵描きモジュール
+レイヤー概念があるお絵描きパッケージ
 
 # 特徴
 - フルスクラッチ
@@ -19,7 +19,7 @@ https://unj.netlify.app/oekaki/demo
 
 # 注意点
 - Volta/pnpm使用
-  - Bun製モジュール->Volta/pnpm環境に一発で導入できないことがあったりするので
+  - Bun製パッケージ->Volta/pnpm環境に一発で導入できないことがあったりするので
   その逆パターンもあるかもしれないので注意
   - cdn経由で読み込んで型定義を自作すればどんな環境でも導入可能やろうな
 - スポイトは標準非搭載
@@ -39,6 +39,10 @@ import * as oekaki from "@onjmin/oekaki/layered-canvas.js";
 ```
 
 ### ブラウザ
+```html
+<script src="https://cdn.jsdelivr.net/npm/@onjmin/oekaki@1.0.1/dist/index.global.js"></script>
+```
+
 ```js
 const oekaki = await import("https://onjmin.github.io/oekaki/dist/index.mjs");
 ```
