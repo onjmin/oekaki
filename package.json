@@ -1,6 +1,6 @@
 {
 	"name": "@onjmin/oekaki",
-	"version": "1.0.1",
+	"version": "1.0.2",
 	"description": "",
 	"main": "dist/index.cjs",
 	"module": "dist/index.mjs",
@@ -10,7 +10,9 @@
 		"lint": "biome check .",
 		"format": "biome format . --write"
 	},
-	"files": ["dist"],
+	"files": [
+		"dist"
+	],
 	"keywords": [],
 	"author": "",
 	"license": "AGPL-3.0",
