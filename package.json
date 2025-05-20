@@ -1,5 +1,5 @@
 {
-	"name": "oekaki",
+	"name": "@onjmin/oekaki",
 	"version": "1.0.1",
 	"description": "",
 	"main": "dist/index.cjs",
