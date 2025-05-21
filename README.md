@@ -35,7 +35,7 @@ https://unj.netlify.app/oekaki/demo
 ## 読み込み
 ### node
 ```ts
-import oekaki from "@onjmin/oekaki/layered-canvas.js";
+import * as oekaki from "@onjmin/oekaki";
 ```
 
 ### ブラウザ
