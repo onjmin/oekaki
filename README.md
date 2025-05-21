@@ -35,17 +35,16 @@ https://unj.netlify.app/oekaki/demo
 ## 読み込み
 ### node
 ```ts
-import * as oekaki from "@onjmin/oekaki/layered-canvas.js";
+import oekaki from "@onjmin/oekaki/layered-canvas.js";
 ```
 
 ### ブラウザ
-```html
-<script src="https://cdn.jsdelivr.net/npm/@onjmin/oekaki@1.0.1/dist/index.global.js"></script>
+#### 動的インポートの場合
+```js
+const oekaki = await import("https://cdn.jsdelivr.net/npm/@onjmin/oekaki/dist/index.mjs");
 ```
 
-```js
-const oekaki = await import("https://onjmin.github.io/oekaki/dist/index.mjs");
-```
+
 
 ## 実行
 ※コピペで試せるようにtsじゃなくjsで書いてるやで。ts & Svelteでの本番環境の使用例はリンク先
@@ -55,6 +54,9 @@ https://github.com/onjmin/unj/blob/main/src/client/parts/OekakiPart.svelte#L210-
 代わりに色々とカスタマイズの余地があるやで
 
 ```js
+// ブラウザの場合の動的インポート
+const oekaki = await import("https://cdn.jsdelivr.net/npm/@onjmin/oekaki/dist/index.mjs");
+
 // canvasの入れ物を用意する。セレクタで取ってくる方法も可
 const wrapper = document.createElement("div");
 document.body.append(wrapper);
@@ -73,6 +75,23 @@ lowerLayer = oekaki.lowerLayer.value;
 if (upperLayer) upperLayer.canvas.classList.add("upper-canvas");
 if (lowerLayer) lowerLayer.canvas.classList.add("lower-canvas");
 // ここまで
+
+// 適当な背景
+lowerLayer.canvas.style.backgroundColor = '#fff';
+lowerLayer.canvas.style.backgroundImage = `
+  linear-gradient(45deg, #eee 25%, transparent 25%),
+  linear-gradient(-45deg, #eee 25%, transparent 25%),
+  linear-gradient(45deg, transparent 75%, #eee 75%),
+  linear-gradient(-45deg, transparent 75%, #eee 75%)
+`;
+lowerLayer.canvas.style.backgroundSize = '16px 16px';
+lowerLayer.canvas.style.backgroundPosition = `
+  0 0,
+  0 8px,
+  8px -8px,
+  -8px 0px
+`;
+//
 
 const activeLayer = new oekaki.LayeredCanvas("レイヤー #1"); // 1枚目のレイヤー新規作成
 
@@ -157,6 +176,6 @@ oekaki.color.value = "#FF0000";     // ペンの色を赤に設定
 oekaki.penSize.value = 4;           // 通常ペンのサイズを4pxに設定
 oekaki.brushSize.value = 10;        // ブラシサイズを10pxに設定
 oekaki.eraserSize.value = 12;       // 消しゴムサイズを12pxに設定
-oekaki.dotPenScale.value = 8;       // ドットペンを8x8の太さに設定
+oekaki.setDotSize(8);       // ドットペンを8x8の太さに設定
 // ここまで
 ```
