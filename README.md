@@ -18,7 +18,7 @@
 https://unj.netlify.app/oekaki/demo
 
 # 注意点
-- `Volta,pnpm` 使用
+- `Volta,pnpm` の使用が前提
   - `Bun製パッケージ` → `Volta,pnpm` 環境に一発で導入できないことがあったりするんで
     - その逆パターンもあるかもしれないので注意
   - cdn経由で読み込んで型定義を自作すればどんな環境でも導入可能やろうな
