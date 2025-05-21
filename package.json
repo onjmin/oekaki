@@ -16,11 +16,10 @@
 	"scripts": {
 		"build": "tsup",
 		"lint": "biome check .",
-		"format": "biome format . --write"
+		"format": "biome format . --write",
+		"docs": "pnpm exec typedoc src/index.ts --out docs"
 	},
-	"files": [
-		"dist"
-	],
+	"files": ["dist"],
 	"keywords": [],
 	"author": "",
 	"license": "AGPL-3.0",

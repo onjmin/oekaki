@@ -19,7 +19,7 @@ https://unj.netlify.app/oekaki/demo
 
 # 注意点
 - Volta/pnpm使用
-  - `Bun製パッケージ` → `Volta/pnpm`環境に一発で導入できないことがあったりするんで
+  - `Bun製パッケージ` → `Volta/pnpm` 環境に一発で導入できないことがあったりするんで
     - その逆パターンもあるかもしれないので注意
   - cdn経由で読み込んで型定義を自作すればどんな環境でも導入可能やろうな
 - スポイトは標準非搭載
@@ -29,34 +29,32 @@ https://unj.netlify.app/oekaki/demo
 - React・Vue対応について
   - 主はReact・Vueやったことないからわからん！
   - Svelteでアプリで運用中やからReact・Vueでも動くんちゃうか？
-    - もしそのままだと使えず、正式に公開するならreact-oekakiみたいな派生を公開することになるやで
+    - もしそのままだと使えず、正式に公開するならreact-oekakiみたいな派生を公開するもんやと思うで
 
 # サンプルコード
-## 読み込み
-### node
+## Node.jsへの静的なimport
 ```ts
 import * as oekaki from "@onjmin/oekaki";
 ```
 
-### ブラウザ
-#### 動的インポートの場合
+## ブラウザへのダイナミックインポート
 ```js
 const oekaki = await import("https://cdn.jsdelivr.net/npm/@onjmin/oekaki/dist/index.mjs");
 ```
 
 
 
-## 実行
+## 使用例
 ※コピペで試せるようにtsじゃなくjsで書いてるやで
 
 ts & Svelteでの本番環境の使用例はリンク先
 https://github.com/onjmin/unj/blob/main/src/client/parts/OekakiPart.svelte#L210-L319
 
 クソ長くてすまんな
-代わりに色々とカスタマイズの余地があるやで
+代わりと言っては何やが色々とカスタマイズの余地があるやで
 
 ```js
-// ブラウザの場合の動的インポート
+// ブラウザへのダイナミックインポート
 const oekaki = await import("https://cdn.jsdelivr.net/npm/@onjmin/oekaki/dist/index.mjs");
 
 // canvasの入れ物を用意する。セレクタで取ってくる方法も可
@@ -93,7 +91,7 @@ lowerLayer.canvas.style.backgroundPosition = `
   8px -8px,
   -8px 0px
 `;
-//
+// ここまで
 
 let mode = 1;
 

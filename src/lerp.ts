@@ -1,5 +1,7 @@
 /**
  * 線形補間
+ *
+ * イベントは連続して発生しないんで、間の座標を計算する必要があるんや
  */
 export const lerp = (x: number, y: number, _x: number, _y: number) => {
 	const a = _x - x;

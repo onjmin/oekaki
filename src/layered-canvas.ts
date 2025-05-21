@@ -9,6 +9,9 @@ let g_lower: LayeredCanvas; // 背景用
 let g_serial_number = 0;
 let g_layers: (LayeredCanvas | null)[] = [];
 
+/**
+ * インポート先から書き換え可能な入れ物
+ */
 class Config<T> {
 	#value: T;
 	#reactive: (() => void) | null;
@@ -60,7 +63,7 @@ export const getDotSize = () => g_dot_size;
 
 /**
  * 1ドットの大きさを変更する
- * @param dotPenScale ドットペンの太さの倍率（1なら最細）
+ * @param dotPenScale ドットペンの太さの倍率（1が最小）
  * @param maxDotCount ドットを最大でいくつに分割するか（解像度的な意味）
  * @param canvasLength 対象キャンバスの一辺の長さ（幅または高さ）
  */
@@ -74,6 +77,9 @@ export const setDotSize = (
 
 /**
  * レイヤーリストを取得
+ *
+ * 内部レイヤーリストは削除されると添え字そのままnullになるんやが
+ * この関数はnullを除外したレイヤーリストを返すんやで
  */
 export const getLayers = (): LayeredCanvas[] => {
 	const layers = [];
@@ -174,7 +180,7 @@ export const onDrawn = (
 };
 
 /**
- * レイヤーの一時保存が可能な情報
+ * ストレージなどに一時保存可能なレイヤー情報
  */
 export type LayeredCanvasMeta = {
 	name: string;
@@ -193,14 +199,41 @@ export type LayeredCanvasMeta = {
 export class LayeredCanvas {
 	canvas: HTMLCanvasElement;
 	ctx: CanvasRenderingContext2D;
+	/**
+	 * レイヤー名
+	 */
 	name: string;
+	/**
+	 * 内部レイヤーリストの添え字
+	 */
 	index: number;
+	/**
+	 * レイヤーの描画履歴
+	 */
 	history = new LinkedList<Uint8ClampedArray>();
+	/**
+	 * 差分検出用ハッシュ
+	 */
 	hash = 0;
+	/**
+	 * レイヤーの可視性
+	 */
 	#visible = true;
+	/**
+	 * レイヤーの不透明度[%]
+	 */
 	#opacity = 100;
+	/**
+	 * レイヤーロック
+	 */
 	locked = false;
+	/**
+	 * 使用済みレイヤー
+	 */
 	used = false;
+	/**
+	 * レイヤーの一意なid
+	 */
 	uuid: string;
 	constructor(name = "", uuid = "") {
 		this.name = name;
@@ -221,10 +254,16 @@ export class LayeredCanvas {
 		this.index = g_layers.length - 1;
 		this.trace();
 	}
+	/**
+	 * ストレージなどに一時保存可能なレイヤー情報
+	 */
 	get meta() {
 		const { name, index, hash, visible, opacity, locked, used, uuid } = this;
 		return { name, index, hash, visible, opacity, locked, used, uuid };
 	}
+	/**
+	 * ストレージなどに一時保存可能なレイヤー情報
+	 */
 	set meta(meta: LayeredCanvasMeta) {
 		this.name = meta.name;
 		this.index = meta.index;
@@ -235,6 +274,9 @@ export class LayeredCanvas {
 		this.used = meta.used;
 		this.uuid = meta.uuid;
 	}
+	/**
+	 * レイヤーの削除
+	 */
 	delete() {
 		g_layers[this.index] = null; // 欠番
 		this.canvas.remove();
@@ -268,23 +310,41 @@ export class LayeredCanvas {
 			this.canvas.style.zIndex,
 		];
 	}
+	/**
+	 * レイヤーの可視性
+	 */
 	get visible() {
 		return this.#visible;
 	}
+	/**
+	 * レイヤーの可視性
+	 */
 	set visible(visible: boolean) {
 		this.#visible = visible;
 		this.canvas.style.visibility = this.#visible ? "visible" : "hidden";
 	}
+	/**
+	 * レイヤーの不透明度[%]
+	 */
 	get opacity() {
 		return this.#opacity;
 	}
+	/**
+	 * レイヤーの不透明度[%]
+	 */
 	set opacity(opacity: number) {
 		this.#opacity = opacity;
 		this.canvas.style.opacity = `${opacity}%`;
 	}
+	/**
+	 * レイヤーのUint8ClampedArray
+	 */
 	get data() {
 		return this.ctx.getImageData(0, 0, g_width, g_height).data;
 	}
+	/**
+	 * レイヤーのUint8ClampedArray
+	 */
 	set data(data: Uint8ClampedArray) {
 		const imageData = new ImageData(data, g_width, g_height);
 		this.ctx.putImageData(imageData, 0, 0);
@@ -301,25 +361,40 @@ export class LayeredCanvas {
 		}
 		return false;
 	}
+	/**
+	 * レイヤーの描画履歴の保存
+	 */
 	trace() {
 		this.history.add(this.data);
 	}
+	/**
+	 * レイヤーの描画履歴を1つ戻す
+	 */
 	undo() {
 		if (this.locked) return;
 		const data = this.history.undo();
 		if (!data) return;
 		this.data = data;
 	}
+	/**
+	 * レイヤーの描画履歴を1つ進める
+	 */
 	redo() {
 		if (this.locked) return;
 		const data = this.history.redo();
 		if (!data) return;
 		this.data = data;
 	}
+	/**
+	 * 全消し
+	 */
 	clear() {
 		if (this.locked) return;
 		this.ctx.clearRect(0, 0, g_width, g_height);
 	}
+	/**
+	 * ドット消しゴム
+	 */
 	eraseDot(x: number, y: number) {
 		if (this.locked) return;
 		const size = g_dot_size;
@@ -327,6 +402,9 @@ export class LayeredCanvas {
 		const _y = Math.floor(y / size) * size;
 		this.ctx.clearRect(_x, _y, size, size);
 	}
+	/**
+	 * ドットペン
+	 */
 	drawDot(x: number, y: number) {
 		if (this.locked) return;
 		this.ctx.fillStyle = color.value;
@@ -335,6 +413,9 @@ export class LayeredCanvas {
 		const _y = Math.floor(y / size) * size;
 		this.ctx.fillRect(_x, _y, size, size);
 	}
+	/**
+	 * 消しゴム
+	 */
 	erase(x: number, y: number) {
 		if (this.locked) return;
 		this.ctx.globalCompositeOperation = "destination-out";
@@ -343,6 +424,9 @@ export class LayeredCanvas {
 		this.ctx.fill();
 		this.ctx.globalCompositeOperation = "source-over";
 	}
+	/**
+	 * ペン
+	 */
 	draw(x: number, y: number) {
 		if (this.locked) return;
 		this.ctx.fillStyle = color.value;
@@ -350,6 +434,9 @@ export class LayeredCanvas {
 		const radius = size >> 1;
 		this.ctx.fillRect(x - radius, y - radius, size, size);
 	}
+	/**
+	 * ブラシ
+	 */
 	drawLine(fromX: number, fromY: number, toX: number, toY: number) {
 		if (this.locked) return;
 		this.ctx.strokeStyle = color.value;
@@ -363,7 +450,7 @@ export class LayeredCanvas {
 }
 
 /**
- * 1枚のcanvasに書き出す
+ * 全レイヤーを1枚のcanvasに書き出す
  */
 export const render = () => {
 	const canvas = document.createElement("canvas");
@@ -381,6 +468,9 @@ export const render = () => {
 
 /**
  * nullを詰める
+ *
+ * 内部レイヤーリストは削除されると添え字そのままnullになるんやが
+ * 気が向いたときに掃除や
  */
 export const refresh = () => {
 	const layers = getLayers();

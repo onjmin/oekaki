@@ -2,6 +2,8 @@ type RGBA = [number, number, number, number];
 
 /**
  * 塗りつぶし
+ *
+ * 多分bfsや
  */
 export const floodFill = (
 	data: Uint8ClampedArray,
