@@ -18,18 +18,25 @@
 https://unj.netlify.app/oekaki/demo
 
 # 注意点
-- `Volta & pnpm` 使用
-  - `Bun製パッケージ` → `Volta & pnpm` 環境に一発で導入できないことがあったりするんで
+- `Volta,pnpm` 使用
+  - `Bun製パッケージ` → `Volta,pnpm` 環境に一発で導入できないことがあったりするんで
     - その逆パターンもあるかもしれないので注意
   - cdn経由で読み込んで型定義を自作すればどんな環境でも導入可能やろうな
 - スポイトは標準非搭載
   - アクティブなレイヤーか、1番手前のレイヤーから採るのか派閥がありそうだったからな
   - その他にもCSSなど、個人の実装に幅がありそうなものは非搭載なんやが
     - oekakiに生えてるメソッドを駆使すれば勝手にお前らが実装できるで
-- `React | Vue` 対応について
-  - 主は `React | Vue` やったことないからわからん！
-  - Svelteでの使用実績があるから `React | Vue` でも動くんちゃうか？
+- `React,Vue` 対応について
+  - 主は `React,Vue` やったことないからわからん！
+  - Svelteでの使用実績があるから `React,Vue` でも動くんちゃうか？
     - もしそのままだと使えず、正式に公開するならreact-oekakiみたいな派生を公開するもんやと思うで
+
+# インストール
+```sh
+pnpm i @onjmin/oekaki
+```
+
+`Bun,Deno` で動くのか不明。
 
 # サンプルコード
 ## Node.jsへの静的なimport
@@ -42,10 +49,8 @@ import * as oekaki from "@onjmin/oekaki";
 const oekaki = await import("https://cdn.jsdelivr.net/npm/@onjmin/oekaki/dist/index.mjs");
 ```
 
-
-
 ## 使用例
-- `TypeScript & Svelte` の使用例はリンク先
+- `TypeScript,Svelte` の使用例はリンク先
   - https://github.com/onjmin/unj/blob/main/src/client/parts/OekakiPart.svelte
 
 ---
