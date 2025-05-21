@@ -17,7 +17,9 @@
 		"build": "tsup",
 		"lint": "biome check .",
 		"format": "biome format . --write",
-		"docs": "pnpm exec typedoc src/index.ts --out docs"
+		"docs": "typedoc src/index.ts --out docs",
+		"release": "pnpm run build && pnpm run lint && pnpm run format && pnpm run docs",
+		"publish": "pnpm version patch && pnpm publish --access public"
 	},
 	"files": ["dist"],
 	"keywords": [],
