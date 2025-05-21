@@ -20,11 +20,9 @@
 		"docs": "typedoc src/index.ts --out docs",
 		"release": "pnpm run build && pnpm run lint && pnpm run format && pnpm run docs",
 		"patch": "pnpm version patch",
-		"publish": "pnpm publish --access public"
+		"publish-dangerous-dont-use-this-command": "pnpm publish --access public"
 	},
-	"files": [
-		"dist"
-	],
+	"files": ["dist"],
 	"keywords": [],
 	"author": "",
 	"license": "AGPL-3.0",
