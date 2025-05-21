@@ -93,8 +93,6 @@ lowerLayer.canvas.style.backgroundPosition = `
 `;
 //
 
-const activeLayer = new oekaki.LayeredCanvas("レイヤー #1"); // 1枚目のレイヤー新規作成
-
 let mode = 1;
 
 // イベントリスナの登録
@@ -150,11 +148,6 @@ oekaki.onDrawn((x, y, buttons) => { // 描き終わりに発火
 oekaki.onClick((x, y, buttons) => {}); // 右クリック禁止するために取り合えず要る。またはPC限定ショートカットを登録する用
 // ここまで
 
-new oekaki.LayeredCanvas("レイヤー #2"); // 2枚目のレイヤー新規作成
-new oekaki.LayeredCanvas("レイヤー #3"); // 3枚目のレイヤー新規作成
-
-console.log(oekaki.getLayers()) // レイヤーのリストを取得
-
 // 1枚の画像にして保存（後でこの関数を実行してみてね）
 const save = () => {
   const dataURL = oekaki.render().toDataURL("image/png");
@@ -178,4 +171,18 @@ oekaki.brushSize.value = 10;        // ブラシサイズを10pxに設定
 oekaki.eraserSize.value = 12;       // 消しゴムサイズを12pxに設定
 oekaki.setDotSize(8);       // ドットペンを8x8の太さに設定
 // ここまで
+
+const layer1 = new oekaki.LayeredCanvas("レイヤー #1"); // 1枚目のレイヤー新規作成
+const layer2 = new oekaki.LayeredCanvas("レイヤー #2"); // 2枚目のレイヤー新規作成
+const layer3 = new oekaki.LayeredCanvas("レイヤー #3"); // 3枚目のレイヤー新規作成
+
+console.log(oekaki.getLayers()) // レイヤーのリストを取得
+
+// activeLayer = layer1; // レイヤー1に切り替え
+activeLayer = layer2; // レイヤー2に切り替え
+// activeLayer = layer3; // レイヤー3に切り替え
+
+// activeLayer = oekaki.getLayers()[0]; // レイヤー1に切り替え
+// activeLayer = oekaki.getLayers()[1]; // レイヤー2に切り替え
+// activeLayer = oekaki.getLayers()[2]; // レイヤー3に切り替え
 ```
