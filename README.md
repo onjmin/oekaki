@@ -19,13 +19,13 @@ https://unj.netlify.app/oekaki/demo
 
 # 注意点
 - Volta/pnpm使用
-  - Bun製パッケージ->Volta/pnpm環境に一発で導入できないことがあったりするので
-  その逆パターンもあるかもしれないので注意
+  - `Bun製パッケージ` → `Volta/pnpm`環境に一発で導入できないことがあったりするんで
+    - その逆パターンもあるかもしれないので注意
   - cdn経由で読み込んで型定義を自作すればどんな環境でも導入可能やろうな
 - スポイトは標準非搭載
-  - 1枚のレイヤーか
+  - アクティブなレイヤーか、1番手前のレイヤーから採るのか派閥がありそうだったからな
   - その他にもCSSなど、個人の実装に幅がありそうなものは非搭載なんやが
-  oekakiに生えてるメソッドを駆使すれば勝手にお前らが実装できるで
+    - oekakiに生えてるメソッドを駆使すれば勝手にお前らが実装できるで
 - React・Vue対応について
   - 主はReact・Vueやったことないからわからん！
   - Svelteでアプリで運用中やからReact・Vueでも動くんちゃうか？
@@ -47,7 +47,9 @@ const oekaki = await import("https://cdn.jsdelivr.net/npm/@onjmin/oekaki/dist/in
 
 
 ## 実行
-※コピペで試せるようにtsじゃなくjsで書いてるやで。ts & Svelteでの本番環境の使用例はリンク先
+※コピペで試せるようにtsじゃなくjsで書いてるやで
+
+ts & Svelteでの本番環境の使用例はリンク先
 https://github.com/onjmin/unj/blob/main/src/client/parts/OekakiPart.svelte#L210-L319
 
 クソ長くてすまんな
