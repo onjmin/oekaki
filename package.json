@@ -19,11 +19,10 @@
 		"format": "biome format . --write",
 		"docs": "typedoc src/index.ts --out docs",
 		"release": "pnpm run build && pnpm run lint && pnpm run format && pnpm run docs",
-		"publish": "pnpm version patch && pnpm publish --access public"
+		"patch": "pnpm version patch",
+		"publish": "pnpm publish --access public"
 	},
-	"files": [
-		"dist"
-	],
+	"files": ["dist"],
 	"keywords": [],
 	"author": "",
 	"license": "AGPL-3.0",
