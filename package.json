@@ -1,6 +1,6 @@
 {
 	"name": "@onjmin/oekaki",
-	"version": "1.0.19",
+	"version": "1.0.20",
 	"description": "レイヤー概念があるお絵描きパッケージ",
 	"homepage": "https://onjmin.github.io/oekaki",
 	"repository": {
