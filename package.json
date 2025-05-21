@@ -1,7 +1,11 @@
 {
 	"name": "@onjmin/oekaki",
 	"version": "1.0.4",
-	"description": "",
+	"description": "レイヤー概念があるお絵描きパッケージ",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/onjmin/oekaki.git"
+	},
 	"main": "dist/index.cjs",
 	"module": "dist/index.mjs",
 	"types": "dist/index.d.ts",
@@ -10,9 +14,7 @@
 		"lint": "biome check .",
 		"format": "biome format . --write"
 	},
-	"files": [
-		"dist"
-	],
+	"files": ["dist"],
 	"keywords": [],
 	"author": "",
 	"license": "AGPL-3.0",
