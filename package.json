@@ -1,6 +1,6 @@
 {
 	"name": "@onjmin/oekaki",
-	"version": "1.0.7",
+	"version": "1.0.8",
 	"description": "レイヤー概念があるお絵描きパッケージ",
 	"homepage": "https://onjmin.github.io/oekaki",
 	"repository": {
@@ -21,7 +21,9 @@
 		"release": "pnpm run build && pnpm run lint && pnpm run format && pnpm run docs",
 		"publish": "pnpm version patch && pnpm publish --access public"
 	},
-	"files": ["dist"],
+	"files": [
+		"dist"
+	],
 	"keywords": [],
 	"author": "",
 	"license": "AGPL-3.0",
