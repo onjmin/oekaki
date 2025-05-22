@@ -22,9 +22,7 @@
 		"patch": "pnpm version patch",
 		"publish-dangerous-dont-use-this-command": "pnpm publish --access public"
 	},
-	"files": [
-		"dist"
-	],
+	"files": ["dist"],
 	"keywords": [],
 	"author": "",
 	"license": "AGPL-3.0",
