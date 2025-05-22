@@ -4,8 +4,8 @@ let g_layer_container: HTMLElement | null = null;
 let g_width: number;
 let g_height: number;
 let g_dot_size: number;
-let g_upper: LayeredCanvas; // 描画検出用
 let g_lower: LayeredCanvas; // 背景用
+let g_upper: LayeredCanvas; // 描画検出用
 let g_serial_number = 0;
 let g_layers: (LayeredCanvas | null)[] = [];
 
@@ -34,14 +34,14 @@ class Config<T> {
 export const color = new Config("#222222"); // 濃いめの黒（自然な線画）
 
 /**
- * ペンの太さ
- */
-export const penSize = new Config(16);
-
-/**
  * ブラシの太さ
  */
 export const brushSize = new Config(2);
+
+/**
+ * ペンの太さ
+ */
+export const penSize = new Config(16);
 
 /**
  * 消しゴムの太さ
@@ -89,7 +89,14 @@ export const getLayers = (): LayeredCanvas[] => {
 	return layers;
 };
 
+/**
+ * 背景用
+ */
 export const lowerLayer = new Config<LayeredCanvas | null>(null);
+
+/**
+ * 描画検出用
+ */
 export const upperLayer = new Config<LayeredCanvas | null>(null);
 
 /**
@@ -111,7 +118,7 @@ export const init = (mountTarget: HTMLElement, width = 640, height = 360) => {
 	g_serial_number = 0;
 	g_lower = new LayeredCanvas(""); // 1
 	g_upper = new LayeredCanvas(""); // 2 (永久欠番)
-	g_upper.canvas.style.zIndex = String(2 ** 16);
+	g_upper.canvas.style.zIndex = String(2 ** 16 + 3); // レイヤー上限枚数の仮設定65536枚
 	lowerLayer.value = g_lower;
 	upperLayer.value = g_upper;
 	g_layers = [];
