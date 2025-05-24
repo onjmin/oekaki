@@ -10,7 +10,7 @@
 	"bugs": {
 		"url": "https://github.com/onjmin/oekaki/issues"
 	},
-	"main": "dist/index.cjs",
+	"main": "dist/index.js",
 	"module": "dist/index.mjs",
 	"types": "dist/index.d.ts",
 	"scripts": {
