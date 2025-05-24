@@ -12,7 +12,7 @@ let g_layers: (LayeredCanvas | null)[] = [];
 /**
  * インポート先から書き換え可能な入れ物
  */
-class Config<T> {
+export class Config<T> {
 	#value: T;
 	#reactive: (() => void) | null;
 	constructor(defaultValue: T, reactive?: () => void) {

@@ -14,11 +14,8 @@
 	"module": "dist/index.mjs",
 	"types": "dist/index.d.ts",
 	"scripts": {
-		"build": "tsup",
-		"lint": "biome check .",
-		"format": "biome format . --write",
-		"docs": "typedoc src/index.ts --out docs",
-		"release": "pnpm run build && pnpm run lint && pnpm run format && pnpm run docs",
+		"build": "rimraf dist docs && tsup && biome check src && biome format src --write && typedoc src/index.ts --out docs",
+		"prepublishOnly": "pnpm run build",
 		"patch": "pnpm version patch",
 		"publish-dangerous-dont-use-this-command": "pnpm publish --access public"
 	},
@@ -34,6 +31,7 @@
 	},
 	"devDependencies": {
 		"@biomejs/biome": "1.9.4",
+		"rimraf": "6.0.1",
 		"tsup": "8.5.0",
 		"typedoc": "0.28.4",
 		"typescript": "5.8.3"

@@ -1,4 +1,7 @@
-type RGBA = [number, number, number, number];
+/**
+ * RGBA配列
+ */
+export type RGBA = [number, number, number, number];
 
 /**
  * 塗りつぶし
