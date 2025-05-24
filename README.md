@@ -33,7 +33,7 @@ https://unj.netlify.app/oekaki/demo
 
 # インストール
 ```sh
-pnpm i @onjmin/oekaki
+pnpm i -D @onjmin/oekaki
 ```
 
 `Bun,Deno` で動くのか不明。
