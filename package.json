@@ -14,7 +14,7 @@
 	"module": "dist/index.mjs",
 	"types": "dist/index.d.ts",
 	"scripts": {
-		"build": "rimraf dist docs && tsup && biome check src && biome format src --write && typedoc src/index.ts --out docs",
+		"build": "rimraf dist && tsup && biome check src && biome format src --write",
 		"prepublishOnly": "pnpm run build",
 		"patch": "pnpm version patch",
 		"publish-dangerous-dont-use-this-command": "pnpm publish --access public"
