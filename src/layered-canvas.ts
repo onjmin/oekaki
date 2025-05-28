@@ -78,7 +78,7 @@ export const setDotSize = (
 /**
  * 座標をドット基準に調整
  */
-const fix = (n: number) => Math.floor(n / g_dot_size) * g_dot_size;
+const fix = (n: number) => Math.ceil(n / g_dot_size) * g_dot_size;
 
 /**
  * レイヤーリストを取得
@@ -411,11 +411,7 @@ export class LayeredCanvas {
 		if (this.locked) return;
 		const imageData = this.ctx.getImageData(0, 0, g_width, g_height);
 		this.clear();
-		this.ctx.putImageData(
-			imageData,
-			fix(x - g_width / 2),
-			fix(y - g_height / 2),
-		);
+		this.ctx.putImageData(imageData, fix(x), fix(y));
 	}
 	/**
 	 * 平行移動
@@ -424,11 +420,7 @@ export class LayeredCanvas {
 		if (this.locked) return;
 		const imageData = this.ctx.getImageData(0, 0, g_width, g_height);
 		this.clear();
-		this.ctx.putImageData(
-			imageData,
-			Math.floor(x - g_width / 2),
-			Math.floor(y - g_height / 2),
-		);
+		this.ctx.putImageData(imageData, Math.floor(x), Math.floor(y));
 	}
 	/**
 	 * ドット消しゴム
