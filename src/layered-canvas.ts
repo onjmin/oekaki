@@ -82,7 +82,7 @@ let snappedX = 0;
 let snappedY = 0;
 let offsetX = 0;
 let offsetY = 0;
-let translatingImageData: ImageData | null = null;
+let translating: ImageData | null = null;
 const resetTranslation = () => {
 	accDx = 0;
 	accDy = 0;
@@ -90,7 +90,7 @@ const resetTranslation = () => {
 	snappedY = 0;
 	offsetX = 0;
 	offsetY = 0;
-	translatingImageData = null;
+	translating = null;
 };
 
 /**
@@ -431,10 +431,10 @@ export class LayeredCanvas {
 		const newSnappedX = Math.round(accDx / size) * size;
 		const newSnappedY = Math.round(accDy / size) * size;
 		if (newSnappedX !== snappedX || newSnappedY !== snappedY) {
-			if (!translatingImageData)
-				translatingImageData = this.ctx.getImageData(0, 0, g_width, g_height);
+			if (!translating)
+				translating = this.ctx.getImageData(0, 0, g_width, g_height);
 			this.clear();
-			this.ctx.putImageData(translatingImageData, newSnappedX, newSnappedY);
+			this.ctx.putImageData(translating, newSnappedX, newSnappedY);
 			snappedX = newSnappedX;
 			snappedY = newSnappedY;
 		}
@@ -446,13 +446,13 @@ export class LayeredCanvas {
 	 */
 	translate(dx: number, dy: number) {
 		if (this.locked) return;
-		if (!translatingImageData)
-			translatingImageData = this.ctx.getImageData(0, 0, g_width, g_height);
+		if (!translating)
+			translating = this.ctx.getImageData(0, 0, g_width, g_height);
 		offsetX += dx;
 		offsetY += dy;
 		this.clear();
 		this.ctx.putImageData(
-			translatingImageData,
+			translating,
 			Math.floor(offsetX),
 			Math.floor(offsetY),
 		);
