@@ -18,10 +18,6 @@
 https://unj.netlify.app/oekaki/demo
 
 # 注意点
-- `Volta,pnpm` の使用が前提
-  - `Bun製パッケージ` → `Volta,pnpm` 環境に一発で導入できないことがあったりするんで
-    - その逆パターンもあるかもしれないので注意
-  - cdn経由で読み込んで型定義を自作すればどんな環境でも導入可能やろうな
 - スポイトは標準非搭載
   - アクティブなレイヤーか、1番手前のレイヤーから採るのか派閥がありそうだったからな
   - その他にもCSSなど、個人の実装に幅がありそうなものは非搭載なんやが
@@ -33,10 +29,8 @@ https://unj.netlify.app/oekaki/demo
 
 # インストール
 ```sh
-pnpm i @onjmin/oekaki
+npm i @onjmin/oekaki
 ```
-
-`Bun,Deno` で動くのか不明。
 
 # サンプルコード
 ## Node.jsへの静的なimport
@@ -52,6 +46,9 @@ const oekaki = await import("https://cdn.jsdelivr.net/npm/@onjmin/oekaki/dist/in
 ## 使用例
 - `TypeScript,Svelte` の使用例はリンク先
   - https://github.com/onjmin/unj/blob/main/src/client/parts/OekakiPart.svelte
+
+- 関数一覧
+  - https://onjmin.github.io/oekaki
 
 ---
 
@@ -120,10 +117,10 @@ oekaki.onDraw((x, y, buttons) => { // 描き始め・描いてる途中に発火
           for (const [x, y] of lerps) activeLayer?.erase(x, y);
           break;
         case 4: // ドット絵用のペン
-          for (const [x, y] of lerps) activeLayer?.drawDot(x, y);
+          for (const [x, y] of lerps) activeLayer?.drawByDot(x, y);
           break;
         case 5: // ドット絵用の消しゴム
-          for (const [x, y] of lerps) activeLayer?.eraseDot(x, y);
+          for (const [x, y] of lerps) activeLayer?.eraseByDot(x, y);
           break;
       }
     }
