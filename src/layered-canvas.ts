@@ -76,11 +76,6 @@ export const setDotSize = (
 };
 
 /**
- * 座標をドット基準に調整
- */
-const fix = (n: number) => Math.round(n / g_dot_size) * g_dot_size;
-
-/**
  * レイヤーリストを取得
  *
  * 内部レイヤーリストは削除されると添え字そのままnullになるんやが
@@ -406,28 +401,38 @@ export class LayeredCanvas {
 	}
 	/**
 	 * ドット基準で平行移動
+	 * @param dx x差分
+	 * @param dy y差分
 	 */
-	translateByDot(x: number, y: number) {
+	translateByDot(dx: number, dy: number) {
 		if (this.locked) return;
 		const imageData = this.ctx.getImageData(0, 0, g_width, g_height);
 		this.clear();
-		this.ctx.putImageData(imageData, fix(x), fix(y));
+		const size = g_dot_size;
+		const _dx = dx > 0 ? Math.floor(dx / size) : Math.ceil(dx / size);
+		const _dy = dy > 0 ? Math.floor(dy / size) : Math.ceil(dy / size);
+		this.ctx.putImageData(imageData, _dx * size, _dy * size);
 	}
 	/**
 	 * 平行移動
+	 * @param dx x差分
+	 * @param dy y差分
 	 */
-	translate(x: number, y: number) {
+	translate(dx: number, dy: number) {
 		if (this.locked) return;
 		const imageData = this.ctx.getImageData(0, 0, g_width, g_height);
 		this.clear();
-		this.ctx.putImageData(imageData, Math.floor(x), Math.floor(y));
+		this.ctx.putImageData(imageData, Math.floor(dx), Math.floor(dy));
 	}
 	/**
 	 * ドット消しゴム
 	 */
 	eraseByDot(x: number, y: number) {
 		if (this.locked) return;
-		this.ctx.clearRect(fix(x), fix(y), g_dot_size, g_dot_size);
+		const size = g_dot_size;
+		const _x = Math.floor(x / size) * size;
+		const _y = Math.floor(y / size) * size;
+		this.ctx.clearRect(_x, _y, size, size);
 	}
 	/**
 	 * ドットペン
@@ -435,7 +440,10 @@ export class LayeredCanvas {
 	drawByDot(x: number, y: number) {
 		if (this.locked) return;
 		this.ctx.fillStyle = color.value;
-		this.ctx.fillRect(fix(x), fix(y), g_dot_size, g_dot_size);
+		const size = g_dot_size;
+		const _x = Math.floor(x / size) * size;
+		const _y = Math.floor(y / size) * size;
+		this.ctx.fillRect(_x, _y, size, size);
 	}
 	/**
 	 * 消しゴム
