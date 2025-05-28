@@ -65,7 +65,7 @@ export const getDotSize = () => g_dot_size;
  * 1ドットの大きさを変更する
  * @param dotPenScale ドットペンの太さの倍率（1が最小）
  * @param maxDotCount ドットを最大でいくつに分割するか（解像度的な意味）
- * @param canvasLength 対象キャンバスの一辺の長さ（幅または高さ）
+ * @param canvasLength 分割対象（幅か高さのどちらに合わせるか）
  */
 export const setDotSize = (
 	dotPenScale = 1,
