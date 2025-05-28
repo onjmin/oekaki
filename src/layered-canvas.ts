@@ -78,7 +78,7 @@ export const setDotSize = (
 /**
  * 座標をドット基準に調整
  */
-const fix = (n: number) => Math.ceil(n / g_dot_size) * g_dot_size;
+const fix = (n: number) => Math.round(n / g_dot_size) * g_dot_size;
 
 /**
  * レイヤーリストを取得
