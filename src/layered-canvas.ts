@@ -78,14 +78,18 @@ export const setDotSize = (
 
 let accDx = 0;
 let accDy = 0;
-let lastSnappedX = 0;
-let lastSnappedY = 0;
+let snappedX = 0;
+let snappedY = 0;
+let offsetX = 0;
+let offsetY = 0;
 let translatingImageData: ImageData | null = null;
 const resetTranslation = () => {
 	accDx = 0;
 	accDy = 0;
-	lastSnappedX = 0;
-	lastSnappedY = 0;
+	snappedX = 0;
+	snappedY = 0;
+	offsetX = 0;
+	offsetY = 0;
 	translatingImageData = null;
 };
 
@@ -423,18 +427,16 @@ export class LayeredCanvas {
 		if (this.locked) return;
 		const size = g_dot_size;
 		accDx += dx;
-		const snappedX = Math.round(accDx / size) * size;
-		const deltaX = snappedX - lastSnappedX;
 		accDy += dy;
-		const snappedY = Math.round(accDy / size) * size;
-		const deltaY = snappedY - lastSnappedY;
-		if (deltaX !== 0 || deltaY !== 0) {
+		const newSnappedX = Math.round(accDx / size) * size;
+		const newSnappedY = Math.round(accDy / size) * size;
+		if (newSnappedX !== snappedX || newSnappedY !== snappedY) {
 			if (!translatingImageData)
 				translatingImageData = this.ctx.getImageData(0, 0, g_width, g_height);
 			this.clear();
-			this.ctx.putImageData(translatingImageData, deltaX, deltaY);
-			lastSnappedX = snappedX;
-			lastSnappedY = snappedY;
+			this.ctx.putImageData(translatingImageData, newSnappedX, newSnappedY);
+			snappedX = newSnappedX;
+			snappedY = newSnappedY;
 		}
 	}
 	/**
@@ -446,8 +448,14 @@ export class LayeredCanvas {
 		if (this.locked) return;
 		if (!translatingImageData)
 			translatingImageData = this.ctx.getImageData(0, 0, g_width, g_height);
+		offsetX += dx;
+		offsetY += dy;
 		this.clear();
-		this.ctx.putImageData(translatingImageData, Math.floor(dx), Math.floor(dy));
+		this.ctx.putImageData(
+			translatingImageData,
+			Math.floor(offsetX),
+			Math.floor(offsetY),
+		);
 	}
 	/**
 	 * ドット消しゴム
