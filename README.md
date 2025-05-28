@@ -1,7 +1,12 @@
 # oekaki
 レイヤー概念があるお絵描きパッケージ
 
-# 特徴
+## リンク集
+- 🛫 [仕様書](https://onjmin.github.io/oekaki)
+- 🌟 [GitHubリポジトリ](https://github.com/onjmin/unj)
+- 🌴 [npmパッケージ](https://www.npmjs.com/package/@onjmin/oekaki)
+
+## 特徴
 - フルスクラッチ
   - ブラウザ組み込みのAPIのみを使用
   - きっかけはSvelteアプリから読み込む用途やったが、Svelteにも非依存な設計
@@ -14,10 +19,10 @@
     - https://discord.gg/vXt32n38BK
     - https://unj.netlify.app
 
-# DEMO
+## DEMO
 https://unj.netlify.app/oekaki/demo
 
-# 注意点
+## 注意点
 - スポイトは標準非搭載
   - アクティブなレイヤーか、1番手前のレイヤーから採るのか派閥がありそうだったからな
   - その他にもCSSなど、個人の実装に幅がありそうなものは非搭載なんやが
@@ -27,28 +32,25 @@ https://unj.netlify.app/oekaki/demo
   - Svelteでの使用実績があるから `React,Vue` でも動くんちゃうか？
     - もしそのままだと使えず、正式に公開するならreact-oekakiみたいな派生を公開するもんやと思うで
 
-# インストール
+## インストール
 ```sh
 npm i @onjmin/oekaki
 ```
 
-# サンプルコード
-## Node.jsへの静的なimport
+## サンプルコード
+### Node.jsへの静的なimport
 ```ts
 import * as oekaki from "@onjmin/oekaki";
 ```
 
-## ブラウザへのダイナミックインポート
+### ブラウザへのダイナミックインポート
 ```js
 const oekaki = await import("https://cdn.jsdelivr.net/npm/@onjmin/oekaki/dist/index.mjs");
 ```
 
-## 使用例
+### 使用例
 - `TypeScript,Svelte` の使用例はリンク先
   - https://github.com/onjmin/unj/blob/main/src/client/parts/OekakiPart.svelte
-
-- 関数一覧
-  - https://onjmin.github.io/oekaki
 
 ---
 
