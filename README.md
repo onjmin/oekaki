@@ -1,11 +1,6 @@
 # oekaki
 レイヤー概念があるお絵描きパッケージ
 
-## リンク集
-- 🛫 [仕様書](https://onjmin.github.io/oekaki)
-- 🌟 [GitHubリポジトリ](https://github.com/onjmin/unj)
-- 🌴 [npmパッケージ](https://www.npmjs.com/package/@onjmin/oekaki)
-
 ## 特徴
 - フルスクラッチ
   - ブラウザ組み込みのAPIのみを使用
@@ -19,8 +14,11 @@
     - https://discord.gg/vXt32n38BK
     - https://unj.netlify.app
 
-## DEMO
-https://unj.netlify.app/oekaki/demo
+## リンク集
+- 👀 [DEMO](https://unj.netlify.app/oekaki/demo)
+- 🛫 [仕様書](https://onjmin.github.io/oekaki)
+- 🌟 [GitHubリポジトリ](https://github.com/onjmin/unj)
+- 🌴 [npmパッケージ](https://www.npmjs.com/package/@onjmin/oekaki)
 
 ## 注意点
 - スポイトは標準非搭載
