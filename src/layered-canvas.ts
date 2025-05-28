@@ -73,6 +73,7 @@ export const setDotSize = (
 	canvasLength = g_height,
 ) => {
 	g_dot_size = Math.floor(Math.floor(canvasLength / maxDotCount) * dotPenScale);
+	resetTranslation();
 };
 
 /**
@@ -155,6 +156,7 @@ export const onDraw = (
 	callback: (x: number, y: number, buttons: number) => void,
 ) => {
 	g_upper.canvas.addEventListener("pointerdown", (e) => {
+		resetTranslation();
 		g_upper.canvas.setPointerCapture(e.pointerId);
 		drawing = true;
 		callback(...f(e));
@@ -198,6 +200,17 @@ export type LayeredCanvasMeta = {
 	locked: boolean;
 	used: boolean;
 	uuid: string;
+};
+
+let accDx = 0;
+let accDy = 0;
+let lastSnappedX = 0;
+let lastSnappedY = 0;
+const resetTranslation = () => {
+	accDx = 0;
+	accDy = 0;
+	lastSnappedX = 0;
+	lastSnappedY = 0;
 };
 
 /**
@@ -406,12 +419,20 @@ export class LayeredCanvas {
 	 */
 	translateByDot(dx: number, dy: number) {
 		if (this.locked) return;
-		const imageData = this.ctx.getImageData(0, 0, g_width, g_height);
-		this.clear();
 		const size = g_dot_size;
-		const _dx = dx > 0 ? Math.floor(dx / size) : Math.ceil(dx / size);
-		const _dy = dy > 0 ? Math.floor(dy / size) : Math.ceil(dy / size);
-		this.ctx.putImageData(imageData, _dx * size, _dy * size);
+		accDx += dx;
+		const snappedX = Math.round(accDx / size) * size;
+		const deltaX = snappedX - lastSnappedX;
+		accDy += dy;
+		const snappedY = Math.round(accDy / size) * size;
+		const deltaY = snappedY - lastSnappedY;
+		if (deltaX !== 0 || deltaY !== 0) {
+			const imageData = this.ctx.getImageData(0, 0, g_width, g_height);
+			this.clear();
+			this.ctx.putImageData(imageData, deltaX, deltaY);
+			lastSnappedX = snappedX;
+			lastSnappedY = snappedY;
+		}
 	}
 	/**
 	 * 平行移動
