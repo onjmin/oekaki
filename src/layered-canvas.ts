@@ -76,6 +76,19 @@ export const setDotSize = (
 	resetTranslation();
 };
 
+let accDx = 0;
+let accDy = 0;
+let lastSnappedX = 0;
+let lastSnappedY = 0;
+let translatingImageData: ImageData | null = null;
+const resetTranslation = () => {
+	accDx = 0;
+	accDy = 0;
+	lastSnappedX = 0;
+	lastSnappedY = 0;
+	translatingImageData = null;
+};
+
 /**
  * レイヤーリストを取得
  *
@@ -200,17 +213,6 @@ export type LayeredCanvasMeta = {
 	locked: boolean;
 	used: boolean;
 	uuid: string;
-};
-
-let accDx = 0;
-let accDy = 0;
-let lastSnappedX = 0;
-let lastSnappedY = 0;
-const resetTranslation = () => {
-	accDx = 0;
-	accDy = 0;
-	lastSnappedX = 0;
-	lastSnappedY = 0;
 };
 
 /**
@@ -427,9 +429,10 @@ export class LayeredCanvas {
 		const snappedY = Math.round(accDy / size) * size;
 		const deltaY = snappedY - lastSnappedY;
 		if (deltaX !== 0 || deltaY !== 0) {
-			const imageData = this.ctx.getImageData(0, 0, g_width, g_height);
+			if (!translatingImageData)
+				translatingImageData = this.ctx.getImageData(0, 0, g_width, g_height);
 			this.clear();
-			this.ctx.putImageData(imageData, deltaX, deltaY);
+			this.ctx.putImageData(translatingImageData, deltaX, deltaY);
 			lastSnappedX = snappedX;
 			lastSnappedY = snappedY;
 		}
@@ -441,9 +444,10 @@ export class LayeredCanvas {
 	 */
 	translate(dx: number, dy: number) {
 		if (this.locked) return;
-		const imageData = this.ctx.getImageData(0, 0, g_width, g_height);
+		if (!translatingImageData)
+			translatingImageData = this.ctx.getImageData(0, 0, g_width, g_height);
 		this.clear();
-		this.ctx.putImageData(imageData, Math.floor(dx), Math.floor(dy));
+		this.ctx.putImageData(translatingImageData, Math.floor(dx), Math.floor(dy));
 	}
 	/**
 	 * ドット消しゴム
