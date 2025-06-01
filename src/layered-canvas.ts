@@ -107,6 +107,30 @@ export const getLayers = (): LayeredCanvas[] => {
 	return layers;
 };
 
+const insertAfter = (sp1: HTMLCanvasElement, sp2: HTMLCanvasElement) =>
+	g_layer_container?.insertBefore(sp1, sp2.nextSibling);
+
+/**
+ * レイヤーリストを読み込む
+ *
+ * init()不要の差し替え
+ * @param layers getLayers()から取得できる値
+ */
+export const setLayers = (layers: LayeredCanvas[]) => {
+	for (const layer of g_layers) {
+		layer?.canvas.remove();
+	}
+	g_layers = layers;
+	refresh();
+	let el = g_lower.canvas;
+	for (const layer of g_layers) {
+		if (layer) {
+			insertAfter(layer.canvas, el);
+			el = layer.canvas;
+		}
+	}
+};
+
 /**
  * 背景用
  */
@@ -538,9 +562,11 @@ export const render = () => {
  * 気が向いたときに掃除や
  */
 export const refresh = () => {
+	g_serial_number = 2;
 	const layers = getLayers();
 	for (const [i, layer] of layers.entries()) {
 		layer.index = i;
+		layer.canvas.style.zIndex = String(++g_serial_number); // 採番は1始まり
 	}
 	g_layers = layers;
 };
