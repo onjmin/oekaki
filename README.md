@@ -17,7 +17,7 @@
 ## リンク集
 - 👀 [DEMO](https://unj.netlify.app/oekaki/demo)
 - 🛫 [仕様書](https://onjmin.github.io/oekaki)
-- 🌟 [GitHubリポジトリ](https://github.com/onjmin/unj)
+- 🌟 [GitHubリポジトリ](https://github.com/onjmin/oekaki)
 - 🌴 [npmパッケージ](https://www.npmjs.com/package/@onjmin/oekaki)
 
 ## 注意点
