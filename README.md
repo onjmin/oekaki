@@ -189,3 +189,11 @@ activeLayer = layer2; // レイヤー2に切り替え
 // activeLayer = oekaki.getLayers()[1]; // レイヤー2に切り替え
 // activeLayer = oekaki.getLayers()[2]; // レイヤー3に切り替え
 ```
+
+## ライセンス / License
+
+- **AGPL-3.0**  
+  本プロジェクト全体には AGPL-3.0 ライセンスが適用されます。詳細は [`LICENSE`](./LICENSE) をご覧ください。
+
+## 開発者 / Author
++ [おんJ民](https://github.com/onjmin)
