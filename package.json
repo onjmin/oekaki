@@ -27,7 +27,11 @@
 		"html5",
 		"pixel-art",
 		"z-index",
-		"layer"
+		"layer",
+		"events",
+		"pointer",
+		"mouse",
+		"touch"
 	],
 	"author": "",
 	"license": "AGPL-3.0",
