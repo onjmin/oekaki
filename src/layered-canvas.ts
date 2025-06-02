@@ -203,7 +203,12 @@ export const onDraw = (
 		callback(...f(e));
 	});
 	g_upper.canvas.addEventListener("pointermove", (e) => {
-		if (drawing) callback(...f(e));
+		if (drawing) {
+			for (const ev of e.getCoalescedEvents()) {
+				callback(...f(ev));
+			}
+			callback(...f(e));
+		}
 	});
 	// スクロールとピンチインとピンチアウトを抑止
 	g_upper.canvas.addEventListener("touchstart", (e) => e.preventDefault(), {
