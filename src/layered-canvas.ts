@@ -63,6 +63,7 @@ export const getDotSize = () => g_dot_size;
 
 /**
  * 1ドットの大きさを変更する
+ *
  * @param dotPenScale ドットペンの太さの倍率（1が最小）
  * @param maxDotCount ドットを最大でいくつに分割するか（解像度的な意味）
  * @param canvasLength 分割対象（幅か高さのどちらに合わせるか）
@@ -461,6 +462,7 @@ export class LayeredCanvas {
 	}
 	/**
 	 * ドット基準で平行移動
+	 *
 	 * @param dx x差分
 	 * @param dy y差分
 	 */
@@ -482,6 +484,7 @@ export class LayeredCanvas {
 	}
 	/**
 	 * 平行移動
+	 *
 	 * @param dx x差分
 	 * @param dy y差分
 	 */
@@ -499,7 +502,7 @@ export class LayeredCanvas {
 		);
 	}
 	/**
-	 * ドット消しゴム
+	 * ドット基準の消しゴム
 	 */
 	eraseByDot(x: number, y: number) {
 		if (this.locked) return;
@@ -509,7 +512,7 @@ export class LayeredCanvas {
 		this.ctx.clearRect(_x, _y, size, size);
 	}
 	/**
-	 * ドットペン
+	 * ドット基準のペン
 	 */
 	drawByDot(x: number, y: number) {
 		if (this.locked) return;
