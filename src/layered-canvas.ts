@@ -175,8 +175,6 @@ const f = (e: MouseEvent | PointerEvent): [number, number, number] => {
 	return [x, y, e.buttons];
 };
 
-const r = requestAnimationFrame;
-
 /**
  * ユーザーのクリックイベント
  * PC専用ショートカットを考えるときなどに
@@ -184,11 +182,13 @@ const r = requestAnimationFrame;
 export const onClick = (
 	callback: (x: number, y: number, buttons: number) => void,
 ) => {
-	g_upper.canvas.addEventListener("click", (e) => r(() => callback(...f(e))));
+	g_upper.canvas.addEventListener("click", (e) =>
+		requestAnimationFrame(() => callback(...f(e))),
+	);
 	g_upper.canvas.addEventListener("contextmenu", (e) => e.preventDefault());
 	g_upper.canvas.addEventListener("auxclick", (e) => {
 		e.preventDefault();
-		r(() => callback(...f(e)));
+		requestAnimationFrame(() => callback(...f(e)));
 	});
 };
 
@@ -202,14 +202,14 @@ export const onDraw = (
 		resetTranslation();
 		g_upper.canvas.setPointerCapture(e.pointerId);
 		drawing = true;
-		r(() => callback(...f(e)));
+		requestAnimationFrame(() => callback(...f(e)));
 	});
 	g_upper.canvas.addEventListener("pointermove", (e) => {
 		if (drawing) {
 			for (const ev of e.getCoalescedEvents()) {
-				r(() => callback(...f(ev)));
+				requestAnimationFrame(() => callback(...f(ev)));
 			}
-			r(() => callback(...f(e)));
+			requestAnimationFrame(() => callback(...f(e)));
 		}
 	});
 	// スクロールとピンチインとピンチアウトを抑止
@@ -232,7 +232,7 @@ export const onDrawn = (
 	g_upper.canvas.addEventListener("pointerup", (e) => {
 		g_upper.canvas.releasePointerCapture(e.pointerId);
 		drawing = false;
-		r(() => callback(...f(e)));
+		requestAnimationFrame(() => callback(...f(e)));
 	});
 };
 
