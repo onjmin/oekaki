@@ -182,8 +182,10 @@ const f = (e: MouseEvent | PointerEvent): [number, number, number] => {
 export const onClick = (
 	callback: (x: number, y: number, buttons: number) => void,
 ) => {
-	g_upper.canvas.addEventListener("click", (e) =>
-		requestAnimationFrame(() => callback(...f(e))),
+	g_upper.canvas.addEventListener(
+		"click",
+		(e) => requestAnimationFrame(() => callback(...f(e))),
+		{ passive: true },
 	);
 	g_upper.canvas.addEventListener("contextmenu", (e) => e.preventDefault());
 	g_upper.canvas.addEventListener("auxclick", (e) => {
@@ -198,27 +200,31 @@ export const onClick = (
 export const onDraw = (
 	callback: (x: number, y: number, buttons: number) => void,
 ) => {
-	g_upper.canvas.addEventListener("pointerdown", (e) => {
-		resetTranslation();
-		g_upper.canvas.setPointerCapture(e.pointerId);
-		drawing = true;
-		requestAnimationFrame(() => callback(...f(e)));
-	});
-	g_upper.canvas.addEventListener("pointermove", (e) => {
-		if (drawing) {
-			for (const ev of e.getCoalescedEvents()) {
-				requestAnimationFrame(() => callback(...f(ev)));
-			}
+	g_upper.canvas.addEventListener(
+		"pointerdown",
+		(e) => {
+			resetTranslation();
+			g_upper.canvas.setPointerCapture(e.pointerId);
+			drawing = true;
 			requestAnimationFrame(() => callback(...f(e)));
-		}
-	});
+		},
+		{ passive: true },
+	);
+	g_upper.canvas.addEventListener(
+		"pointermove",
+		(e) => {
+			if (drawing) {
+				for (const ev of e.getCoalescedEvents()) {
+					requestAnimationFrame(() => callback(...f(ev)));
+				}
+				requestAnimationFrame(() => callback(...f(e)));
+			}
+		},
+		{ passive: true },
+	);
 	// スクロールとピンチインとピンチアウトを抑止
-	g_upper.canvas.addEventListener("touchstart", (e) => e.preventDefault(), {
-		passive: false,
-	});
-	g_upper.canvas.addEventListener("touchmove", (e) => e.preventDefault(), {
-		passive: false,
-	});
+	g_upper.canvas.addEventListener("touchstart", (e) => e.preventDefault());
+	g_upper.canvas.addEventListener("touchmove", (e) => e.preventDefault());
 };
 
 let drawing = false;
@@ -229,11 +235,15 @@ let drawing = false;
 export const onDrawn = (
 	callback: (x: number, y: number, buttons: number) => void,
 ) => {
-	g_upper.canvas.addEventListener("pointerup", (e) => {
-		g_upper.canvas.releasePointerCapture(e.pointerId);
-		drawing = false;
-		requestAnimationFrame(() => callback(...f(e)));
-	});
+	g_upper.canvas.addEventListener(
+		"pointerup",
+		(e) => {
+			g_upper.canvas.releasePointerCapture(e.pointerId);
+			drawing = false;
+			requestAnimationFrame(() => callback(...f(e)));
+		},
+		{ passive: true },
+	);
 };
 
 /**
