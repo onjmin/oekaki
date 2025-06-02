@@ -22,7 +22,13 @@
 	"files": [
 		"dist"
 	],
-	"keywords": [],
+	"keywords": [
+		"canvas",
+		"html5",
+		"pixel-art",
+		"z-index",
+		"layer"
+	],
 	"author": "",
 	"license": "AGPL-3.0",
 	"volta": {
