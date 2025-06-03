@@ -10,9 +10,9 @@
 - おんJ民が作っている
   - 日本語で質問できる
   - 質問用フォーラム
-    - https://hayabusa.open2ch.net/test/read.cgi/livejupiter/1747569891
-    - https://discord.gg/vXt32n38BK
-    - https://unj.netlify.app
+    - [おんJ](https://hayabusa.open2ch.net/test/read.cgi/livejupiter/1747569891)
+    - [Discord](https://discord.gg/vXt32n38BK)
+    - [うんJ](https://unj.netlify.app)
 
 ## リンク集
 - 👀 [DEMO](https://unj.netlify.app/oekaki/demo)
@@ -47,8 +47,7 @@ const oekaki = await import("https://cdn.jsdelivr.net/npm/@onjmin/oekaki/dist/in
 ```
 
 ### 使用例
-- `TypeScript,Svelte` の使用例はリンク先
-  - https://github.com/onjmin/unj/blob/main/src/client/parts/OekakiPart.svelte
+- `TypeScript,Svelte` の使用例は [リンク先](https://github.com/onjmin/unj/blob/main/src/client/parts/OekakiPart.svelte)
 
 ---
 
