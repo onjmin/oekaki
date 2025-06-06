@@ -167,7 +167,10 @@ export const init = (mountTarget: HTMLElement, width = 640, height = 360) => {
 	g_layers = [];
 };
 
-const f = (e: MouseEvent | PointerEvent): [number, number, number] => {
+/**
+ * カーソルの座標取得
+ */
+export const getXY = (e: MouseEvent): [number, number, number] => {
 	const { clientX, clientY } = e;
 	const rect = g_upper.canvas.getBoundingClientRect();
 	let x = Math.floor(clientX - rect.left);
@@ -185,13 +188,13 @@ export const onClick = (
 ) => {
 	g_upper.canvas.addEventListener(
 		"click",
-		(e) => requestAnimationFrame(() => callback(...f(e))),
+		(e) => requestAnimationFrame(() => callback(...getXY(e))),
 		{ passive: true },
 	);
 	g_upper.canvas.addEventListener("contextmenu", (e) => e.preventDefault());
 	g_upper.canvas.addEventListener("auxclick", (e) => {
 		e.preventDefault();
-		requestAnimationFrame(() => callback(...f(e)));
+		requestAnimationFrame(() => callback(...getXY(e)));
 	});
 };
 
@@ -207,7 +210,7 @@ export const onDraw = (
 			resetTranslation();
 			g_upper.canvas.setPointerCapture(e.pointerId);
 			drawing = true;
-			requestAnimationFrame(() => callback(...f(e)));
+			requestAnimationFrame(() => callback(...getXY(e)));
 		},
 		{ passive: true },
 	);
@@ -216,9 +219,9 @@ export const onDraw = (
 		(e) => {
 			if (drawing) {
 				for (const ev of e.getCoalescedEvents()) {
-					requestAnimationFrame(() => callback(...f(ev)));
+					requestAnimationFrame(() => callback(...getXY(ev)));
 				}
-				requestAnimationFrame(() => callback(...f(e)));
+				requestAnimationFrame(() => callback(...getXY(e)));
 			}
 		},
 		{ passive: true },
@@ -241,7 +244,7 @@ export const onDrawn = (
 		(e) => {
 			g_upper.canvas.releasePointerCapture(e.pointerId);
 			drawing = false;
-			requestAnimationFrame(() => callback(...f(e)));
+			requestAnimationFrame(() => callback(...getXY(e)));
 		},
 		{ passive: true },
 	);
