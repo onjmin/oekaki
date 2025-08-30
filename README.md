@@ -9,7 +9,7 @@
   - vscode上で型の安全性が守られる
 - おんJ民が作っている
   - 日本語で質問できる
-  - 質問用フォーラム
+  - 質問フォーラム
     - [おんJ](https://hayabusa.open2ch.net/test/read.cgi/livejupiter/1747569891)
     - [Discord](https://discord.gg/vXt32n38BK)
     - [うんJ](https://unj.netlify.app)
@@ -43,7 +43,7 @@ import * as oekaki from "@onjmin/oekaki";
 
 ### ブラウザへのダイナミックインポート
 ```js
-const oekaki = await import("https://cdn.jsdelivr.net/npm/@onjmin/oekaki/dist/index.mjs");
+const oekaki = await import("https://cdn.jsdelivr.net/npm/@onjmin/oekaki/dist/index.min.mjs");
 ```
 
 ### 使用例
