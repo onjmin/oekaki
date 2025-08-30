@@ -7,12 +7,8 @@
   - きっかけはSvelteアプリから読み込む用途やったが、Svelteにも非依存な設計
 - TypeScript製
   - vscode上で型の安全性が守られる
-- おんJ民が作っている
-  - 日本語で質問できる
-  - 質問フォーラム
-    - [おんJ](https://hayabusa.open2ch.net/test/read.cgi/livejupiter/1747569891)
-    - [Discord](https://discord.gg/vXt32n38BK)
-    - [うんJ](https://unj.netlify.app)
+- **おんJ民が作っている**  
+  質問や相談はフォーラムで: [質問フォーラム](https://unj.netlify.app)
 
 ## リンク集
 - 👀 [DEMO](https://unj.netlify.app/oekaki/demo)
