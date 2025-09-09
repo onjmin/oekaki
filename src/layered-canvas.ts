@@ -417,7 +417,8 @@ export class LayeredCanvas {
 	 * レイヤーのUint8ClampedArray
 	 */
 	set data(data: Uint8ClampedArray) {
-		const imageData = new ImageData(data, g_width, g_height);
+		const imageData = this.ctx.createImageData(g_width, g_height);
+		imageData.data.set(data);
 		this.ctx.putImageData(imageData, 0, 0);
 	}
 	/**
@@ -462,6 +463,14 @@ export class LayeredCanvas {
 	clear() {
 		if (this.locked) return;
 		this.ctx.clearRect(0, 0, g_width, g_height);
+	}
+	/**
+	 * 塗りつぶし
+	 */
+	fill(color: string) {
+		if (this.locked) return;
+		this.ctx.fillStyle = color;
+		this.ctx.fillRect(0, 0, g_width, g_height);
 	}
 	/**
 	 * ドット基準で平行移動

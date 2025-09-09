@@ -4,9 +4,9 @@
 export type RGBA = [number, number, number, number];
 
 /**
- * 塗りつぶし
+ * バケツ
  *
- * 多分bfsや
+ * 多分bfsやで
  */
 export const floodFill = (
 	data: Uint8ClampedArray,
