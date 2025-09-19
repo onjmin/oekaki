@@ -4,7 +4,7 @@
 ## 特徴
 - フルスクラッチ
   - ブラウザ組み込みのAPIのみを使用
-  - きっかけはSvelteアプリから読み込む用途やったが、Svelteにも非依存な設計
+  - きっかけはSvelteアプリから読み込む用途だったが、Svelteにも非依存な設計
 - TypeScript製
   - vscode上で型の安全性が守られる
 - **おんJ民が作っている**  
@@ -16,15 +16,32 @@
 - 🌟 [GitHubリポジトリ](https://github.com/onjmin/oekaki)
 - 🌴 [npmパッケージ](https://www.npmjs.com/package/@onjmin/oekaki)
 
-## 注意点
-- スポイトは標準非搭載
-  - アクティブなレイヤーか、1番手前のレイヤーから採るのか派閥がありそうだったからな
-  - その他にもCSSなど、個人の実装に幅がありそうなものは非搭載なんやが
-    - oekakiに生えてるメソッドを駆使すれば勝手にお前らが実装できるで
-- `React,Vue` 対応について
-  - 主は `React,Vue` やったことないからわからん！
-  - Svelteでの使用実績があるから `React,Vue` でも動くんちゃうか？
-    - もしそのままだと使えず、正式に公開するならreact-oekakiみたいな派生を公開するもんやと思うで
+## 技術的に興味深い点
+- **ピクセルパーフェクトな描画**  
+  座標やサイズをビット演算で整数化し、常にピクセル境界に揃えることでアンチエイリアスを防ぎ、シャープなドット絵を実現している。  
+
+- **ミニマムなリアクティブプログラミング**  
+  `Config` クラスで変数変更を検知し副作用を実行、状態とUIが自動同期する仕組みをプレーンJSで実装している。  
+
+- **Canvas APIのパフォーマンス最適化**  
+  `willReadFrequently` で `getImageData` の高速化、`getCoalescedEvents` でイベント処理を効率化し、描画を軽快にしている。  
+
+- **ドットサイズ計算**  
+  二重の `Math.floor` で必ず整数化し、基準ドットサイズが崩れないようにしており、倍率を掛けても最終的にピクセル境界に収まる。  
+
+- **平行移動の仕組み**  
+  `translateByDot` は累積移動量をドット単位でスナップし、`translate` は任意オフセット保持と分離して用途を切り分けている。  
+
+- **レイヤー管理**  
+  削除時に `null` を残すことでインデックスの安定性を保ち、必要時にだけ `refresh()` で再採番する遅延クリーンアップ方式を取っている。  
+
+- **描画履歴**  
+  各レイヤーに `LinkedList<Uint8ClampedArray>` を持たせ、効率的な undo/redo と履歴管理を可能にしている。  
+
+- **FNVハッシュ**  
+  ピクセル配列から軽量なハッシュを計算し、差分検出や変更有無を高速に確認できる仕組みを導入している。  
+
+ここから先のディープな話は [質問フォーラム](https://unj.netlify.app) で扱っています。興味のある方はどうぞ！
 
 ## インストール
 ```sh
@@ -43,13 +60,13 @@ const oekaki = await import("https://cdn.jsdelivr.net/npm/@onjmin/oekaki/dist/in
 ```
 
 ### 使用例
-- `TypeScript,Svelte` の使用例は [リンク先](https://github.com/onjmin/unj/blob/main/src/client/parts/OekakiPart.svelte)
+- [`TypeScript,Svelte` の使用例](https://github.com/onjmin/unj/blob/main/src/client/parts/OekakiPart.svelte)
+- [`TypeScript,SvelteKit` の使用例](https://github.com/rpgja/rpgen-walk/blob/main/src/routes/%2Bpage.svelte)
+- [素の `JavaScript` の使用例](https://greasyfork.org/ja/scripts/549955/code)
 
 ---
 
-- コピペで試せるようにtsじゃなくjsで書いてるやで
-- クソ長くてすまんな
-- 代わりと言っては何やが色々とカスタマイズの余地があるやで
+- Chrome DevTools上のコピペで試せるで
 
 ```js
 // ブラウザへのダイナミックインポート

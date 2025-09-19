@@ -473,6 +473,25 @@ export class LayeredCanvas {
 		this.ctx.fillRect(0, 0, g_width, g_height);
 	}
 	/**
+	 * 貼り付け
+	 */
+	paste(
+		image:
+			| HTMLImageElement
+			| HTMLCanvasElement
+			| HTMLVideoElement
+			| ImageBitmap
+			| OffscreenCanvas,
+	) {
+		const { width, height } = image;
+		const ratio = Math.min(g_width / width, g_height / height);
+		const w = (width * ratio) | 0;
+		const h = (height * ratio) | 0;
+		const offsetX = (g_width - w) >> 1;
+		const offsetY = (g_height - h) >> 1;
+		this.ctx.drawImage(image, offsetX, offsetY, w, h);
+	}
+	/**
 	 * ドット基準で平行移動
 	 *
 	 * @param dx x差分
@@ -577,7 +596,7 @@ export const render = () => {
 	const canvas = document.createElement("canvas");
 	canvas.width = g_width;
 	canvas.height = g_height;
-	const ctx = canvas.getContext("2d");
+	const ctx = canvas.getContext("2d", { willReadFrequently: true });
 	if (!ctx) throw new Error("Failed to get 2D rendering context");
 	for (const layer of g_layers) {
 		if (!layer || !layer.visible) continue;
@@ -585,6 +604,21 @@ export const render = () => {
 		ctx.drawImage(layer.canvas, 0, 0);
 	}
 	return canvas;
+};
+
+/**
+ * スポイト機能
+ */
+export const dropper = (
+	x: number,
+	y: number,
+): [number, number, number, number] | null => {
+	const ctx = render().getContext("2d", { willReadFrequently: true });
+	if (!ctx) return null;
+	const { data } = ctx.getImageData(0, 0, g_width, g_height);
+	const index = (y * g_width + x) * 4;
+	const [r, g, b, a] = data.subarray(index, index + 4);
+	return [r, g, b, a];
 };
 
 /**
