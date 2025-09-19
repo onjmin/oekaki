@@ -11,7 +11,7 @@
   質問や相談はフォーラムで: [質問フォーラム](https://unj.netlify.app)
 
 ## リンク集
-- 👀 [DEMO](https://unj.netlify.app/oekaki/demo)
+- 👀 [DEMO](https://rpgja.github.io/rpgen-walk)
 - 🛫 [仕様書](https://onjmin.github.io/oekaki)
 - 🌟 [GitHubリポジトリ](https://github.com/onjmin/oekaki)
 - 🌴 [npmパッケージ](https://www.npmjs.com/package/@onjmin/oekaki)
