@@ -483,6 +483,7 @@ export class LayeredCanvas {
 			| ImageBitmap
 			| OffscreenCanvas,
 	) {
+		if (this.locked) return;
 		const { width, height } = image;
 		const ratio = Math.min(g_width / width, g_height / height);
 		const w = (width * ratio) | 0;
