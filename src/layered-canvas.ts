@@ -395,13 +395,13 @@ export class LayeredCanvas {
 		this.canvas.style.visibility = this.#visible ? "visible" : "hidden";
 	}
 	/**
-	 * レイヤーの不透明度[%]
+	 * レイヤーの不透明度[%] 0-100
 	 */
 	get opacity() {
 		return this.#opacity;
 	}
 	/**
-	 * レイヤーの不透明度[%]
+	 * レイヤーの不透明度[%] 0-100
 	 */
 	set opacity(opacity: number) {
 		this.#opacity = opacity;
@@ -625,8 +625,8 @@ export const dropper = (
 /**
  * nullを詰める
  *
- * 内部レイヤーリストは削除されると添え字そのままnullになるんやが
- * 気が向いたときに掃除や
+ * 内部レイヤーリストは削除されると添え字そのままnullになる
+ * 気が向いたときに掃除すること
  */
 export const refresh = () => {
 	g_serial_number = 2;
