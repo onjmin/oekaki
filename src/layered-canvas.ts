@@ -395,6 +395,12 @@ export class LayeredCanvas {
 		this.canvas.style.visibility = this.#visible ? "visible" : "hidden";
 	}
 	/**
+	 * 編集可能 = ロック解除 & 表示中
+	 */
+	get editable() {
+		return !this.locked && this.#visible
+	}
+	/**
 	 * レイヤーの不透明度[%] 0-100
 	 */
 	get opacity() {
@@ -443,7 +449,7 @@ export class LayeredCanvas {
 	 * レイヤーの描画履歴を1つ戻す
 	 */
 	undo() {
-		if (this.locked) return;
+		if (!this.editable) return;
 		const data = this.history.undo();
 		if (!data) return;
 		this.data = data;
@@ -452,7 +458,7 @@ export class LayeredCanvas {
 	 * レイヤーの描画履歴を1つ進める
 	 */
 	redo() {
-		if (this.locked) return;
+		if (!this.editable) return;
 		const data = this.history.redo();
 		if (!data) return;
 		this.data = data;
@@ -461,14 +467,14 @@ export class LayeredCanvas {
 	 * 全消し
 	 */
 	clear() {
-		if (this.locked) return;
+		if (!this.editable) return;
 		this.ctx.clearRect(0, 0, g_width, g_height);
 	}
 	/**
 	 * 塗りつぶし
 	 */
 	fill(color: string) {
-		if (this.locked) return;
+		if (!this.editable) return;
 		this.ctx.fillStyle = color;
 		this.ctx.fillRect(0, 0, g_width, g_height);
 	}
@@ -483,7 +489,7 @@ export class LayeredCanvas {
 			| ImageBitmap
 			| OffscreenCanvas,
 	) {
-		if (this.locked) return;
+		if (!this.editable) return;
 		const { width, height } = image;
 		const ratio = Math.min(g_width / width, g_height / height);
 		const w = (width * ratio) | 0;
@@ -499,7 +505,7 @@ export class LayeredCanvas {
 	 * @param dy y差分
 	 */
 	translateByDot(dx: number, dy: number) {
-		if (this.locked) return;
+		if (!this.editable) return;
 		const size = g_dot_size;
 		accDx += dx;
 		accDy += dy;
@@ -521,7 +527,7 @@ export class LayeredCanvas {
 	 * @param dy y差分
 	 */
 	translate(dx: number, dy: number) {
-		if (this.locked) return;
+		if (!this.editable) return;
 		if (!translating)
 			translating = this.ctx.getImageData(0, 0, g_width, g_height);
 		offsetX += dx;
@@ -537,7 +543,7 @@ export class LayeredCanvas {
 	 * ドット基準の消しゴム
 	 */
 	eraseByDot(x: number, y: number) {
-		if (this.locked) return;
+		if (!this.editable) return;
 		const size = g_dot_size;
 		const _x = Math.floor(x / size) * size;
 		const _y = Math.floor(y / size) * size;
@@ -547,7 +553,7 @@ export class LayeredCanvas {
 	 * ドット基準のペン
 	 */
 	drawByDot(x: number, y: number) {
-		if (this.locked) return;
+		if (!this.editable) return;
 		this.ctx.fillStyle = color.value;
 		const size = g_dot_size;
 		const _x = Math.floor(x / size) * size;
@@ -558,7 +564,7 @@ export class LayeredCanvas {
 	 * 消しゴム
 	 */
 	erase(x: number, y: number) {
-		if (this.locked) return;
+		if (!this.editable) return;
 		this.ctx.globalCompositeOperation = "destination-out";
 		this.ctx.beginPath();
 		this.ctx.arc(x, y, eraserSize.value >> 1, 0, Math.PI * 2);
@@ -569,7 +575,7 @@ export class LayeredCanvas {
 	 * ペン
 	 */
 	draw(x: number, y: number) {
-		if (this.locked) return;
+		if (!this.editable) return;
 		this.ctx.fillStyle = color.value;
 		const size = penSize.value;
 		const radius = size >> 1;
@@ -579,7 +585,7 @@ export class LayeredCanvas {
 	 * ブラシ
 	 */
 	drawLine(fromX: number, fromY: number, toX: number, toY: number) {
-		if (this.locked) return;
+		if (!this.editable) return;
 		this.ctx.strokeStyle = color.value;
 		this.ctx.lineWidth = brushSize.value;
 		this.ctx.lineCap = "round";
