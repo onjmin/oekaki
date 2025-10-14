@@ -398,7 +398,7 @@ export class LayeredCanvas {
 	 * 編集可能 = ロック解除 & 表示中
 	 */
 	get editable() {
-		return !this.locked && this.#visible
+		return !this.locked && this.#visible;
 	}
 	/**
 	 * レイヤーの不透明度[%] 0-100
