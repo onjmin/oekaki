@@ -1,5 +1,5 @@
 # oekaki
-レイヤー概念があるお絵描きパッケージ
+レイヤー概念があるお絵描きモジュール
 
 ## 特徴
 - フルスクラッチ
@@ -14,7 +14,7 @@
 - 👀 [DEMO](https://onjmin.github.io/oekaki/demo)
 - 🛫 [仕様書](https://onjmin.github.io/oekaki)
 - 🌟 [GitHubリポジトリ](https://github.com/onjmin/oekaki)
-- 🌴 [npmパッケージ](https://www.npmjs.com/package/@onjmin/oekaki)
+- 🌴 [npmモジュール](https://www.npmjs.com/package/@onjmin/oekaki)
 
 ## インストール
 ```sh
