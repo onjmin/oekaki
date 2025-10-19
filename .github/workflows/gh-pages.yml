@@ -34,6 +34,11 @@ jobs:
 
       - name: Build docs
         run: pnpm exec rimraf docs && pnpm exec typedoc src/index.ts --out docs
+        
+      - name: Copy demo/index.html to docs/demo/
+        run: |
+          mkdir -p docs/demo
+          cp demo/index.html docs/demo/index.html
 
       - name: Add .nojekyll
         run: touch ./docs/.nojekyll

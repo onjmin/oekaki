@@ -11,37 +11,10 @@
   質問や相談はフォーラムで: [質問フォーラム](https://unj.netlify.app)
 
 ## リンク集
-- 👀 [DEMO](https://rpgja.github.io/rpgen-walk)
+- 👀 [DEMO](https://onjmin.github.io/oekaki/demo)
 - 🛫 [仕様書](https://onjmin.github.io/oekaki)
 - 🌟 [GitHubリポジトリ](https://github.com/onjmin/oekaki)
 - 🌴 [npmパッケージ](https://www.npmjs.com/package/@onjmin/oekaki)
-
-## 技術的に興味深い点
-- **ピクセルパーフェクトな描画**  
-  座標やサイズをビット演算で整数化し、常にピクセル境界に揃えることでアンチエイリアスを防ぎ、シャープなドット絵を実現している。  
-
-- **ミニマムなリアクティブプログラミング**  
-  `Config` クラスで変数変更を検知し副作用を実行、状態とUIが自動同期する仕組みをプレーンJSで実装している。  
-
-- **Canvas APIのパフォーマンス最適化**  
-  `willReadFrequently` で `getImageData` の高速化、`getCoalescedEvents` でイベント処理を効率化し、描画を軽快にしている。  
-
-- **ドットサイズ計算**  
-  二重の `Math.floor` で必ず整数化し、基準ドットサイズが崩れないようにしており、倍率を掛けても最終的にピクセル境界に収まる。  
-
-- **平行移動の仕組み**  
-  `translateByDot` は累積移動量をドット単位でスナップし、`translate` は任意オフセット保持と分離して用途を切り分けている。  
-
-- **レイヤー管理**  
-  削除時に `null` を残すことでインデックスの安定性を保ち、必要時にだけ `refresh()` で再採番する遅延クリーンアップ方式を取っている。  
-
-- **描画履歴**  
-  各レイヤーに `LinkedList<Uint8ClampedArray>` を持たせ、効率的な undo/redo と履歴管理を可能にしている。  
-
-- **FNVハッシュ**  
-  ピクセル配列から軽量なハッシュを計算し、差分検出や変更有無を高速に確認できる仕組みを導入している。  
-
-ここから先のディープな話は [質問フォーラム](https://unj.netlify.app) で扱っています。興味のある方はどうぞ！
 
 ## インストール
 ```sh
