@@ -5,9 +5,7 @@ type ListNode<T> = {
 };
 
 /**
- * お絵描きの履歴に特化した連結リスト
- *
- * 余計な変換がないんでUint8ClampedArrayを履歴に使うとええぞ
+ * 操作履歴を管理するための双方向連結リスト
  */
 export class LinkedList<T> {
 	#cursor: ListNode<T>;
