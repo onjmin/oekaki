@@ -1,0 +1,765 @@
+<!doctype html>
+<html>
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>お絵描き機能 デモ</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script type="module">
+        import * as mdi from 'https://cdn.jsdelivr.net/npm/@mdi/js@7.4.47/mdi.js';
+        import * as oekaki from 'https://cdn.jsdelivr.net/npm/@onjmin/oekaki/dist/index.min.mjs';
+
+        // UserScriptのGM.addStyleの代替となるカスタムスタイル
+        const style = document.createElement('style');
+        style.textContent = `
+            /* グリッド線のスタイル */
+            .grid .upper-canvas {
+                opacity: 0.4;
+                background-image: linear-gradient(to right, gray 1px, transparent 1px),
+                                  linear-gradient(to bottom, gray 1px, transparent 1px);
+                background-size: var(--grid-cell-size) var(--grid-cell-size);
+            }
+            /* ツールオプションのスタイル */
+            .tool-options {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                margin-bottom: 10px;
+                padding: 10px 0;
+            }
+            .size-display {
+                width: 50px;
+                text-align: center;
+            }
+            .slider-wrapper {
+                flex-grow: 1;
+            }
+            .slider-input {
+                width: 100%;
+            }
+            .palette {
+                width: 30px;
+                height: 30px;
+                border-radius: 50%;
+                border: 2px solid #fff;
+                cursor: pointer;
+                padding: 0;
+                box-shadow: 0 0 0 1px #000;
+            }
+            #oekaki-ui-wrapper {
+                user-select: none;
+            }
+            /* レイヤーパネルのボタンをUserScriptのデザインに近づける */
+            .layer-btn {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 8px;
+                border: 1px solid #555;
+                background-color: #444;
+                color: #fff;
+                cursor: pointer;
+                border-radius: 4px;
+                width: 40px;
+                height: 40px;
+                transition: background-color 0.15s;
+            }
+            .layer-btn:hover:not(:disabled) {
+                 background-color: #666;
+            }
+            .layer-btn:disabled {
+                opacity: 0.5;
+                cursor: not-allowed;
+            }
+        `;
+        document.head.appendChild(style);
+
+
+        // UserScriptのメインロジック開始
+        (async function () {
+            'use strict';
+
+            // HTML要素の取得
+            const oekakiButton = document.getElementById('oekaki-btn');
+            const oekakiUIWrapper = document.getElementById('oekaki-ui-wrapper');
+            const toolPanel = document.getElementById('tool-panel');
+            const toolOptionsPanel = document.getElementById('tool-options-panel');
+            const layerPanel = document.getElementById('layer-panel');
+            const oekakiContainer = document.getElementById('oekaki-container');
+
+            if (!oekakiButton || !oekakiUIWrapper || !toolPanel || !toolOptionsPanel || !layerPanel || !oekakiContainer) {
+                console.error('必要なDOM要素の一部が見つかりません。');
+                return;
+            }
+
+            // 描画キャンバスの初期化サイズ設定
+            let width, height;
+            const setCanvasSize = () => {
+                width = Math.min(window.innerWidth * 0.9, 800);
+                height = Math.min(window.innerHeight * 0.7, 600);
+                oekakiContainer.style.width = `${width}px`;
+                oekakiContainer.style.height = `${height}px`;
+            };
+            setCanvasSize();
+            window.addEventListener('resize', setCanvasSize);
+
+            let activeLayer = null;
+            let oekakiInitialized = false;
+            let choicedTool = 'ペン';
+            let isErasable = false;
+            let isFlipped = false;
+            let isGrid = false;
+            let currentColor = '#000000';
+            let brushSize = 16;
+            let penSize = 4;
+            let eraserSize = 16;
+            let dotPenScale = 1;
+
+            oekaki.color.value = currentColor;
+            oekaki.penSize.value = penSize;
+            oekaki.brushSize.value = brushSize;
+            oekaki.eraserSize.value = eraserSize;
+
+            const recentColors = ['#000000', '#FFFFFF'];
+            const addRecentColors = () => {
+                const tools = { translate: { label: "ハンドツール" } };
+                if (choicedTool === tools.translate.label) return;
+                const idx = recentColors.indexOf(currentColor);
+                if (idx === 0) return;
+                if (idx !== -1) recentColors.splice(idx, 1);
+                recentColors.unshift(currentColor);
+                if (recentColors.length > 8) recentColors.pop();
+            };
+
+            const tools = {
+                brush: { label: "ブラシ", icon: mdi.mdiBrush },
+                pen: { label: "ペン", icon: mdi.mdiPen },
+                eraser: { label: "消しゴム", icon: mdi.mdiEraser },
+                dropper: { label: "カラーピッカー", icon: mdi.mdiEyedropper },
+                fill: { label: "塗りつぶし", icon: mdi.mdiFormatColorFill },
+                translate: { label: "ハンドツール", icon: mdi.mdiHandBackRight },
+                erasable: { label: "常に消しゴム", icon: mdi.mdiEraserVariant },
+                flip: { label: "左右反転", icon: mdi.mdiFlipHorizontal },
+                grid: { label: "グリッド線", icon: mdi.mdiGrid },
+                undo: { label: "戻る", icon: mdi.mdiUndo },
+                redo: { label: "進む", icon: mdi.mdiRedo },
+                save: { label: "画像を保存", icon: mdi.mdiContentSaveOutline },
+                clear: { label: "全消し", icon: mdi.mdiTrashCanOutline }
+            };
+
+            const updateToolOptions = () => {
+                toolOptionsPanel.innerHTML = '';
+                // ... (updateToolOptions関数の中身は前回と同じロジックを維持) ...
+                const sizeDisplay = document.createElement('span');
+                sizeDisplay.className = 'size-display text-white';
+
+                const colorPickerInput = document.createElement('input');
+                colorPickerInput.type = 'color';
+                colorPickerInput.value = currentColor;
+                colorPickerInput.oninput = (e) => {
+                    currentColor = e.target.value;
+                    oekaki.color.value = currentColor;
+                };
+                toolOptionsPanel.appendChild(colorPickerInput);
+
+                recentColors.forEach(color => {
+                    const colorBtn = document.createElement('button');
+                    colorBtn.className = 'palette';
+                    colorBtn.style.backgroundColor = color;
+                    colorBtn.onclick = () => {
+                        currentColor = color;
+                        oekaki.color.value = currentColor;
+                        colorPickerInput.value = currentColor;
+                    };
+                    toolOptionsPanel.appendChild(colorBtn);
+                });
+
+                toolOptionsPanel.appendChild(sizeDisplay);
+
+                const sliderWrapper = document.createElement('div');
+                sliderWrapper.className = 'slider-wrapper';
+
+                const slider = document.createElement('input');
+                slider.type = 'range';
+                slider.min = '1';
+                slider.max = '64';
+                slider.className = 'slider-input';
+
+                if (choicedTool === tools.brush.label) {
+                    sizeDisplay.textContent = `${brushSize}px`;
+                    slider.max = '64';
+                    slider.value = brushSize;
+                    slider.oninput = (e) => {
+                        brushSize = parseInt(e.target.value);
+                        oekaki.brushSize.value = brushSize;
+                        sizeDisplay.textContent = `${brushSize}px`;
+                    };
+                    sliderWrapper.appendChild(slider);
+                } else if (isGrid) {
+                    sizeDisplay.textContent = `${dotPenScale}倍`;
+                    slider.min = '1';
+                    slider.max = '8';
+                    slider.value = dotPenScale;
+                    slider.oninput = (e) => {
+                        dotPenScale = parseInt(e.target.value);
+                        oekaki.setDotSize(dotPenScale);
+                        document.documentElement.style.setProperty("--grid-cell-size", `${oekaki.getDotSize()}px`);
+                        sizeDisplay.textContent = `${dotPenScale}倍`;
+                    };
+                    sliderWrapper.appendChild(slider);
+                } else if (choicedTool === tools.pen.label) {
+                    sizeDisplay.textContent = `${penSize}px`;
+                    slider.max = '64';
+                    slider.value = penSize;
+                    slider.oninput = (e) => {
+                        penSize = parseInt(e.target.value);
+                        oekaki.penSize.value = penSize;
+                        sizeDisplay.textContent = `${penSize}px`;
+                    };
+                    sliderWrapper.appendChild(slider);
+                } else if (choicedTool === tools.eraser.label) {
+                    sizeDisplay.textContent = `${eraserSize}px`;
+                    slider.max = '64';
+                    slider.value = eraserSize;
+                    slider.oninput = (e) => {
+                        eraserSize = parseInt(e.target.value);
+                        oekaki.eraserSize.value = eraserSize;
+                        sizeDisplay.textContent = `${eraserSize}px`;
+                    };
+                    sliderWrapper.appendChild(slider);
+                }
+
+                if (choicedTool !== tools.dropper.label && choicedTool !== tools.fill.label && choicedTool !== tools.translate.label) {
+                    toolOptionsPanel.appendChild(sliderWrapper);
+                }
+            };
+
+            const updateLayerPanel = () => {
+                layerPanel.innerHTML = '';
+                const layers = oekaki.getLayers();
+
+                const header = document.createElement('div');
+                header.className = 'text-white text-lg font-bold mb-2 border-b border-gray-500 pb-1';
+                header.textContent = 'レイヤー';
+                layerPanel.appendChild(header);
+
+                layers.forEach((layer, index) => {
+                    const layerItem = document.createElement('div');
+                    layerItem.className = 'flex items-center justify-between p-2 rounded-md transition-colors';
+                    layerItem.style.backgroundColor = activeLayer === layer ? '#6A1B9A' : 'transparent';
+                    layerItem.style.cursor = 'pointer';
+
+                    const layerNameSpan = document.createElement('span');
+                    layerNameSpan.className = 'flex-1 text-sm truncate';
+                    layerNameSpan.textContent = layer.name;
+                    layerNameSpan.onclick = () => {
+                        activeLayer = layer;
+                        updateLayerPanel();
+                    };
+                    layerItem.appendChild(layerNameSpan);
+
+                    const controls = document.createElement('div');
+                    controls.className = 'flex gap-1';
+                    layerItem.appendChild(controls);
+
+                    const visibilityButton = document.createElement('button');
+                    visibilityButton.className = 'layer-btn';
+                    visibilityButton.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24"><path fill="currentColor" d="${layer.visible ? mdi.mdiEye : mdi.mdiEyeOff}"/></svg>`;
+                    visibilityButton.onclick = (e) => {
+                        e.stopPropagation();
+                        layer.visible = !layer.visible;
+                        updateLayerPanel();
+                    };
+                    controls.appendChild(visibilityButton);
+
+                    const deleteButton = document.createElement('button');
+                    deleteButton.className = 'layer-btn hover:bg-red-500';
+                    deleteButton.disabled = layers.length === 1 || layer.locked;
+                    deleteButton.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24"><path fill="currentColor" d="${mdi.mdiDelete}" /></svg>`;
+                    deleteButton.onclick = (e) => {
+                        e.stopPropagation();
+                        if (layer.locked || layers.length === 1 || (layer.used && !confirm(`${layer.name}を削除しますか？`))) {
+                            return;
+                        }
+
+                        layer.delete();
+                        const remainingLayers = oekaki.getLayers();
+                        if (remainingLayers.length > 0) {
+                            activeLayer = remainingLayers.find(l => l.name !== layer.name) || remainingLayers[remainingLayers.length - 1];
+                        } else {
+                            const newLayer = new oekaki.LayeredCanvas("レイヤー #1");
+                            activeLayer = newLayer;
+                        }
+
+                        updateLayerPanel();
+                    };
+                    controls.appendChild(deleteButton);
+
+                    layerPanel.appendChild(layerItem);
+                });
+
+                const addLayerButton = document.createElement('button');
+                addLayerButton.textContent = '＋ レイヤー追加';
+                addLayerButton.className = 'mt-3 p-2 bg-purple-700 hover:bg-purple-800 text-white rounded transition-colors w-full';
+                addLayerButton.onclick = () => {
+                    const layers = oekaki.getLayers();
+                    const newLayer = new oekaki.LayeredCanvas(`レイヤー #${layers.length + 1}`);
+                    activeLayer = newLayer;
+                    updateLayerPanel();
+                };
+                layerPanel.appendChild(addLayerButton);
+            };
+
+            const mdi2DataUrl = (iconName) => {
+                const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><path d="${iconName}" fill="black" stroke="white" stroke-width="1"/></svg>`;
+                const base64 = btoa(unescape(encodeURIComponent(svg)));
+                return `data:image/svg+xml;base64,${base64}`;
+            };
+
+            const createToolButton = (label, iconName, onClick) => {
+                const button = document.createElement('button');
+                button.title = label;
+                button.className = 'tool-button bg-gray-700 hover:bg-gray-600 text-white p-2 rounded transition-colors';
+                button.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24"><path fill="currentColor" d="${iconName}"/></svg>`;
+                button.onclick = onClick;
+                return button;
+            };
+
+            const updateToolButtons = () => {
+                const buttons = toolPanel.querySelectorAll('.tool-button');
+                buttons.forEach(button => {
+                    const buttonLabel = button.title;
+                    if (buttonLabel === choicedTool ||
+                        (buttonLabel === '常に消しゴム' && isErasable) ||
+                        (buttonLabel === '左右反転' && isFlipped) ||
+                        (buttonLabel === 'グリッド線' && isGrid)) {
+                        button.classList.add('bg-pink-600', 'hover:bg-pink-500');
+                        button.classList.remove('bg-gray-700', 'hover:bg-gray-600');
+                    } else {
+                        button.classList.remove('bg-pink-600', 'hover:bg-pink-500');
+                        button.classList.add('bg-gray-700', 'hover:bg-gray-600');
+                    }
+                });
+                updateToolOptions();
+            };
+
+            const handleKeyDown = async (e) => {
+                if (!e.ctrlKey) return;
+                let key = e.key.toLowerCase();
+                if (e.getModifierState("CapsLock")) {
+                    key = /[a-z]/.test(key) ? key.toUpperCase() : key.toLowerCase();
+                }
+
+                switch (key) {
+                    case "1": { e.preventDefault(); choicedTool = tools.brush.label; break; }
+                    case "2": { e.preventDefault(); choicedTool = tools.pen.label; break; }
+                    case "3": { e.preventDefault(); choicedTool = tools.eraser.label; break; }
+                    case "4": { e.preventDefault(); choicedTool = tools.dropper.label; break; }
+                    case "5": { e.preventDefault(); choicedTool = tools.fill.label; break; }
+                    case "6": { e.preventDefault(); choicedTool = tools.translate.label; break; }
+                    case "e": { e.preventDefault(); isErasable = !isErasable; updateToolButtons(); break; }
+                    case "f": { e.preventDefault(); isFlipped = !isFlipped; oekaki.flipped.value = isFlipped; updateToolButtons(); break; }
+                    case "g": { e.preventDefault(); isGrid = !isGrid; oekakiContainer.classList.toggle('grid', isGrid); updateToolButtons(); break; }
+                    case "z": { e.preventDefault(); if (e.shiftKey) { activeLayer?.redo(); } else { activeLayer?.undo(); } break; }
+                    case "s": {
+                        e.preventDefault();
+                        const dataURL = oekaki.render().toDataURL("image/png");
+                        const link = document.createElement("a");
+                        link.href = dataURL;
+                        link.download = "drawing.png";
+                        link.click();
+                        break;
+                    }
+                    case "c": {
+                        e.preventDefault();
+                        let visible = false;
+                        const bgLayer = oekaki
+                            .getLayers()
+                            .find((v) => v.name.includes("背景"));
+                        if (bgLayer) {
+                            visible = bgLayer.visible;
+                            bgLayer.visible = false;
+                        }
+                        const blob = await new Promise(resolve => oekaki.render().toBlob(resolve));
+                        if (!blob) return;
+                        if (bgLayer) {
+                            bgLayer.visible = visible;
+                        }
+                        await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
+                        break;
+                    }
+                }
+                updateToolButtons();
+            };
+            window.addEventListener('keydown', handleKeyDown);
+
+            window.addEventListener('paste', async (e) => {
+                if (!activeLayer?.editable) return;
+                const imageItem = Array.from(e.clipboardData?.items || []).find(v => v.kind === "file" && v.type.startsWith("image/"));
+                if (!imageItem) return;
+                const blob = imageItem.getAsFile();
+                if (!blob) return;
+                const bitmap = await createImageBitmap(blob);
+                activeLayer.paste(bitmap);
+                activeLayer.trace();
+            });
+
+            const dropper = (x, y) => {
+                if (!activeLayer) return;
+                const result = oekaki.dropper(x, y);
+                if (!result) return;
+                const [r, g, b, a] = result;
+                if (a > 0) {
+                    isErasable = false;
+                    const hex = `#${[r, g, b]
+                        .map((v) => v.toString(16).padStart(2, "0"))
+                        .join("")}`;
+                    currentColor = hex;
+                    oekaki.color.value = currentColor;
+                } else {
+                    isErasable = true;
+                }
+                updateToolOptions();
+            };
+
+            const fill = async (x, y) => {
+                if (!activeLayer) return;
+                const rgb = currentColor
+                    .slice(1)
+                    .match(/.{2}/g)
+                    ?.map((v) => Number.parseInt(v, 16));
+                if (rgb?.length !== 3) return;
+                const [r, g, b] = rgb;
+                const data = oekaki.floodFill(
+                    activeLayer.data,
+                    width,
+                    height,
+                    x,
+                    y,
+                    isErasable ? [0, 0, 0, 0] : [r, g, b, 255],
+                );
+                if (data) activeLayer.data = data;
+            };
+
+            const initOekaki = () => {
+                if (oekakiInitialized) return;
+                oekakiInitialized = true;
+
+                // oekaki.init の実行
+                oekaki.init(oekakiContainer, width, height);
+
+                const upperCanvas = oekaki.upperLayer.value.canvas;
+                if (upperCanvas) {
+                    upperCanvas.classList.add("upper-canvas");
+                }
+                document.documentElement.style.setProperty("--grid-cell-size", `${oekaki.getDotSize()}px`);
+
+                const bgLayer = new oekaki.LayeredCanvas("白背景");
+                bgLayer.fill("#FFF");
+                bgLayer.trace();
+
+                const firstLayer = new oekaki.LayeredCanvas("レイヤー #1");
+                activeLayer = firstLayer;
+
+                updateLayerPanel();
+
+                const separator = "separator";
+
+                // ツールボタンの作成
+                toolPanel.innerHTML = '';
+                [
+                    tools.brush, tools.pen, tools.eraser, tools.dropper, tools.fill, tools.translate,
+                    separator,
+                    tools.erasable, tools.flip, tools.grid,
+                    separator,
+                    tools.undo, tools.redo, tools.save, tools.clear
+                ].forEach(t => {
+                    if (t === separator) {
+                        const separatorElement = document.createElement('div');
+                        separatorElement.className = 'w-px h-10 bg-gray-500 mx-1';
+                        toolPanel.appendChild(separatorElement);
+                        return;
+                    }
+                    const button = createToolButton(t.label, t.icon, async () => {
+                        const toggleTools = [tools.erasable, tools.flip, tools.grid];
+                        if (toggleTools.includes(t)) {
+                            switch (t.label) {
+                                case '常に消しゴム': isErasable = !isErasable; break;
+                                case '左右反転': isFlipped = !isFlipped; oekaki.flipped.value = isFlipped; break;
+                                case 'グリッド線':
+                                    isGrid = !isGrid;
+                                    oekakiContainer.classList.toggle('grid', isGrid);
+                                    if (isGrid) {
+                                        dotPenScale = 4;
+                                        oekaki.setDotSize(dotPenScale);
+                                        document.documentElement.style.setProperty("--grid-cell-size", `${oekaki.getDotSize()}px`);
+                                    }
+                                    break;
+                            }
+                        } else if (t.label === '戻る') {
+                            if (activeLayer) activeLayer.undo();
+                        } else if (t.label === '進む') {
+                            if (activeLayer) activeLayer.redo();
+                        } else if (t.label === '画像を保存') {
+                            const dataURL = oekaki.render().toDataURL("image/png");
+                            const link = document.createElement("a");
+                            link.href = dataURL;
+                            link.download = "drawing.png";
+                            link.click();
+                        } else if (t.label === '全消し') {
+                            if (activeLayer) activeLayer.clear();
+                        } else {
+                            choicedTool = t.label;
+                            const choiced = Object.values(tools).find(v => v.label === choicedTool);
+                            const xy = choiced.label === tools.fill.label ? "21 19" : "3 21";
+                            if (oekaki.upperLayer.value.canvas) {
+                                oekaki.upperLayer.value.canvas.style.cursor = `url('${mdi2DataUrl(choiced.icon)}') ${xy}, auto`;
+                            }
+                        }
+                        updateToolButtons();
+                    });
+                    toolPanel.appendChild(button);
+                });
+
+                // 閉じるボタン
+                const closeButton = document.createElement('button');
+                closeButton.textContent = '閉じる';
+                closeButton.className = 'bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded transition-colors ml-auto';
+                closeButton.addEventListener('click', () => {
+                    oekakiUIWrapper.classList.add('hidden');
+                    alert("描画セッションを終了しました。");
+                });
+                toolPanel.appendChild(closeButton);
+
+
+                const choiced = Object.values(tools).find(v => v.label === choicedTool);
+                const xy = choiced.label === tools.fill.label ? "21 19" : "3 21";
+                oekaki.upperLayer.value.canvas.style.cursor = `url('${mdi2DataUrl(choiced.icon)}') ${xy}, auto`;
+                updateToolButtons();
+
+                let prevX = null;
+                let prevY = null;
+                let dropping = false;
+
+                oekaki.onDraw((x, y, buttons) => {
+                    if (!activeLayer?.editable) return;
+                    if (prevX === null) prevX = x;
+                    if (prevY === null) prevY = y;
+                    if (choicedTool === tools.dropper.label || (buttons & 2) !== 0) {
+                        dropper(x, y);
+                        dropping = true;
+                    } else {
+                        if (choicedTool === tools.brush.label) {
+                            activeLayer.drawLine(x, y, prevX, prevY);
+                        } else if (choicedTool === tools.translate.label) {
+                            if (isGrid) {
+                                activeLayer.translateByDot(x - prevX, y - prevY);
+                            } else {
+                                activeLayer.translate(x - prevX, y - prevY);
+                            }
+                        } else {
+                            const lerps = oekaki.lerp(x, y, prevX, prevY);
+                            switch (choicedTool) {
+                                case tools.pen.label:
+                                    for (const [lx, ly] of lerps) {
+                                        const isEraseMode = isErasable;
+                                        if (isGrid) {
+                                            isEraseMode ? activeLayer.eraseByDot(lx, ly) : activeLayer.drawByDot(lx, ly);
+                                        } else {
+                                            isEraseMode ? activeLayer.erase(lx, ly) : activeLayer.draw(lx, ly);
+                                        }
+                                    }
+                                    break;
+                                case tools.eraser.label:
+                                    for (const [lx, ly] of lerps) {
+                                        if (isGrid) {
+                                            activeLayer.eraseByDot(lx, ly);
+                                        } else {
+                                            activeLayer.erase(lx, ly);
+                                        }
+                                    }
+                                    break;
+                            }
+                        }
+                    }
+                    prevX = x;
+                    prevY = y;
+                });
+
+                const fin = () => {
+                    if (activeLayer?.modified()) {
+                        activeLayer.trace();
+                        addRecentColors();
+                        updateToolOptions();
+                    }
+                };
+
+                oekaki.onDrawn((x, y, buttons) => {
+                    prevX = null;
+                    prevY = null;
+                    if (!activeLayer?.editable) return;
+                    if (choicedTool === tools.fill.label && !dropping) fill(x, y);
+                    dropping = false;
+                    fin();
+                });
+
+                oekaki.upperLayer.value.canvas.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                });
+            };
+
+            oekakiButton.addEventListener('click', () => {
+                oekakiUIWrapper.classList.remove('hidden');
+                initOekaki();
+            });
+
+            initOekaki();
+            oekakiUIWrapper.classList.remove('hidden');
+        })();
+    </script>
+</head>
+
+<body class="bg-gray-100 text-gray-900 p-0 m-0 min-h-screen flex flex-col items-center">
+
+    <header class="p-4 w-full bg-gray-100 shadow-md mb-8 sticky top-0 z-20">
+        <div class="max-w-7xl mx-auto">
+            <h1 class="text-3xl font-extrabold mb-1 text-indigo-700">@onjmin/oekaki DEMO</h1>
+            <p class="text-sm text-gray-700">@onjmin/oekaki ライブラリとMDIアイコンを使用した、ブラウザで動作する多機能お絵描きデモンストレーション。</p>
+        </div>
+    </header>
+
+    <div class="mx-auto p-4 w-full relative z-10">
+
+        <div id="oekaki-ui-wrapper" class="relative bg-gray-100 z-10 flex flex-col justify-center items-center mb-12">
+
+            <h2 class="text-xl font-bold mb-3 text-gray-700">🎨 描画エリア</h2>
+
+            <div id="tool-panel"
+                class="bg-gray-900 p-2 rounded-lg shadow-2xl flex flex-wrap items-center justify-center gap-2 mb-2 w-full max-w-4xl">
+            </div>
+
+            <div id="oekaki-container"
+                class="border-4 border-indigo-500 bg-white shadow-2xl transition-all duration-300"
+                style="box-sizing: content-box; max-width: 100%;">
+            </div>
+
+            <div id="tool-options-panel"
+                class="tool-options bg-gray-900 p-3 rounded-lg shadow-2xl w-full max-w-4xl text-white mt-2">
+            </div>
+
+            <div id="layer-panel"
+                class="absolute top-10 right-0 bg-gray-900 text-white p-3 rounded-lg shadow-2xl max-h-[70vh] overflow-y-auto w-64 border-l-2 border-indigo-500 z-20 hidden md:block">
+            </div>
+
+        </div>
+
+        <div class="text-center my-8">
+            <button id="oekaki-btn" class="
+            bg-indigo-600 
+            hover:bg-indigo-700 
+            text-white 
+            font-bold 
+            py-3 
+            px-8 
+            rounded-full 
+            shadow-lg 
+            hover:shadow-xl 
+            transition-all 
+            duration-300 
+            transform 
+            hover:scale-105 
+            focus:outline-none 
+            focus:ring-4 
+            focus:ring-indigo-300 
+            flex 
+            items-center 
+            mx-auto
+        ">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24"
+                    stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                        d="M15 10l4.55 4.55a1.5 1.5 0 010 2.12L17.5 19.5a1.5 1.5 0 01-2.12 0L10.5 15m-5.87-5.87a2 2 0 112.83 2.83M4 14l6.13-6.13M6 16l4.13-4.13" />
+                </svg>
+                <span>お絵描きキャンバス復活</span>
+            </button>
+        </div>
+
+        <div class="w-full">
+
+            <div class="bg-gray-900 p-6 rounded-xl shadow-xl border border-gray-700 mb-6 text-white">
+                <h2 class="text-2xl font-bold mb-3 text-indigo-400">機能概要</h2>
+                <p class="mt-2 text-gray-200">本デモは、@onjmin/oekaki
+                    ライブラリのコア機能を検証するためのものです。レイヤー、アンドゥ/リドゥ、高度な描画モードなどのモダンな描画機能を、標準的なHTML5とJavaScriptのみで実現しています。</p>
+
+                <ul class="list-disc list-inside mt-4 ml-4 space-y-2 text-gray-200">
+                    <li><strong class="text-indigo-300">コア機能:</strong> レイヤーシステム、元に戻す/やり直し、高精度な描画エンジン。</li>
+                    <li><strong class="text-indigo-300">描画ツール:</strong> ペン、ブラシ、消しゴム、カラーピッカー、塗りつぶし、ハンドツールが利用可能です。</li>
+                    <li><strong class="text-indigo-300">ファイル操作:</strong> 保存（PNG形式）、クリップボードへのコピー/貼り付けに対応。</li>
+                    <li><strong class="text-indigo-300">表示モード:</strong> グリッド線表示、描画エリアの左右反転表示をトグルできます。</li>
+                    <li><strong class="text-indigo-300">UX設計:</strong>
+                        ツールボタンはアイコン付き、選択中のツールは強調表示（ピンク色）、カーソルも自動切り替え、ページロード時にペンツールで即時描画開始。</li>
+                </ul>
+            </div>
+
+            <div class="bg-gray-800 p-6 rounded-xl shadow-xl border border-gray-700 mb-6 text-white">
+                <h2 class="text-2xl font-bold mb-3 text-yellow-300">⚡️ 高速操作のためのショートカットキー</h2>
+                <p class="mt-2 text-gray-200">描画中は以下のキーボードショートカットを利用して、ツールの切り替えや操作を素早く実行できます。</p>
+
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-3 mt-4 text-sm">
+                    <div class="font-bold text-yellow-400 border-b border-yellow-400 pb-1">ツール切り替え</div>
+                    <div class="font-bold text-yellow-400 border-b border-yellow-400 pb-1">描画操作</div>
+                    <div class="font-bold text-yellow-400 border-b border-yellow-400 pb-1">表示/モード</div>
+                    <div class="font-bold text-yellow-400 border-b border-yellow-400 pb-1">ファイル操作</div>
+
+                    <span class="text-gray-200">Ctrl + 1: ブラシ</span>
+                    <span class="text-gray-200">Ctrl + Z: 戻す (Undo)</span>
+                    <span class="text-gray-200">Ctrl + E: 常に消しゴム</span>
+                    <span class="text-gray-200">Ctrl + S: 画像を保存</span>
+
+                    <span class="text-gray-200">Ctrl + 2: ペン</span>
+                    <span class="text-gray-200">Ctrl + Shift + Z: やり直す (Redo)</span>
+                    <span class="text-gray-200">Ctrl + F: 左右反転</span>
+                    <span class="text-gray-200">Ctrl + C: 画像をコピー</span>
+
+                    <span class="text-gray-200">Ctrl + 3: 消しゴム</span>
+                    <span class="text-gray-200">右クリック: カラーピッカー</span>
+                    <span class="text-gray-200">Ctrl + G: グリッド表示</span>
+                    <span class="text-gray-200">Ctrl + V: 画像を貼り付け</span>
+
+                    <span class="text-gray-200">Ctrl + 4: カラーピッカー</span>
+                    <div></div>
+                    <div></div>
+                    <div></div>
+
+                    <span class="text-gray-200">Ctrl + 5: 塗りつぶし</span>
+                    <div></div>
+                    <div></div>
+                    <div></div>
+
+                    <span class="text-gray-200">Ctrl + 6: ハンドツール</span>
+                    <div></div>
+                    <div></div>
+                    <div></div>
+                </div>
+            </div>
+
+            <div class="bg-gray-900 p-6 rounded-xl shadow-xl border border-gray-700 text-white">
+                <h2 class="text-2xl font-bold mb-3 text-green-400">✨ 上級者向けのライブラリ活用法（裏技）</h2>
+                <p class="mt-2 text-gray-200">これらの裏技は、@onjmin/oekaki の持つ高度な描画エンジンの可能性を示しています。</p>
+                <ul class="list-disc list-inside mt-4 ml-4 space-y-2 text-gray-200">
+                    <li><strong class="text-green-300">ドット絵モード:</strong> 【グリッド表示 + ペン】
+                        を使用し、ツールオプションのスライダーでドットサイズを調整すると、正確なドット絵を描画できます。</li>
+                    <li><strong class="text-green-300">透明化塗りつぶし:</strong> 【常に消しゴム + 塗りつぶし】
+                        を実行すると、既存の色を透明色（RGBA[0,0,0,0]）に置き換え、効率的に領域をクリアできます。</li>
+                    <li><strong class="text-green-300">精密移動:</strong> 【グリッド表示 + ハンドツール + ペンサイズ最大】
+                        を組み合わせると、レイヤーをドット単位で正確に移動させることができます。</li>
+                    <li><strong class="text-green-300">残像生成:</strong> 【コピー + レイヤー追加 + 貼り付け】
+                        後、レイヤーパネルで半透明化を行うと、視覚的な残像効果を作成できます。</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>
