@@ -175,6 +175,14 @@ activeLayer = layer2; // レイヤー2に切り替え
 // activeLayer = oekaki.getLayers()[2]; // レイヤー3に切り替え
 ```
 
+## コントリビュート方法
+- 開発環境
+  - 推奨エディタ: vscode
+  - 開発言語: TypeScript
+  - 実行環境: Volta / pnpm / Biome
+- 開発コマンド
+  - `pnpm run dev`: http://localhost:43044 から動作確認可能
+
 ## ライセンス / License
 
 - **AGPL-3.0**  

@@ -8,7 +8,11 @@
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <script type="module">
         import * as mdi from 'https://cdn.jsdelivr.net/npm/@mdi/js@7.4.47/mdi.js';
-        import * as oekaki from 'https://cdn.jsdelivr.net/npm/@onjmin/oekaki/dist/index.min.mjs';
+
+        const oekaki = await import(
+            location.hostname === 'localhost' ?
+                'http://localhost:43044/dist/index.mjs' :
+                'https://onjmin.github.io/oekaki/demo/index.mjs');
 
         // UserScriptのGM.addStyleの代替となるカスタムスタイル
         const style = document.createElement('style');
