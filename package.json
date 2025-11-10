@@ -2,7 +2,7 @@
 	"author": "onjmin",
 	"license": "AGPL-3.0",
 	"name": "@onjmin/oekaki",
-	"version": "1.0.57",
+	"version": "1.0.58",
 	"description": "レイヤー概念があるお絵描きモジュール",
 	"homepage": "https://onjmin.github.io/oekaki",
 	"repository": {
