@@ -4,11 +4,16 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>お絵描き機能 デモ</title>
+    <link rel="icon" href="https://avatars.githubusercontent.com/u/88383494" />
+    <title>@onjmin/oekaki Demo</title>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <script type="module">
         import * as mdi from 'https://cdn.jsdelivr.net/npm/@mdi/js@7.4.47/mdi.js';
-        import * as oekaki from 'https://cdn.jsdelivr.net/npm/@onjmin/oekaki/dist/index.min.mjs';
+
+        const oekaki = await import(
+            location.hostname === 'localhost' ?
+                'http://localhost:43044/dist/index.mjs' :
+                'https://onjmin.github.io/oekaki/demo/index.mjs');
 
         // UserScriptのGM.addStyleの代替となるカスタムスタイル
         const style = document.createElement('style');
@@ -244,6 +249,20 @@
                 header.textContent = 'レイヤー';
                 layerPanel.appendChild(header);
 
+                const addLayerButton = document.createElement('button');
+                addLayerButton.textContent = '＋ レイヤー追加';
+                addLayerButton.className = 'mt-3 p-2 bg-purple-700 hover:bg-purple-800 text-white rounded transition-colors w-full';
+                addLayerButton.onclick = () => {
+                    const newLayer = new oekaki.LayeredCanvas();
+                    newLayer.name = `レイヤー #${newLayer.index + 1}`;
+                    activeLayer = newLayer;
+                    updateLayerPanel();
+                };
+                layerPanel.appendChild(addLayerButton);
+
+                const layersContainer = document.createElement('div');
+                layerPanel.appendChild(layersContainer);
+
                 layers.forEach((layer, index) => {
                     const layerItem = document.createElement('div');
                     layerItem.className = 'flex items-center justify-between p-2 rounded-md transition-colors';
@@ -253,7 +272,7 @@
                     const layerNameSpan = document.createElement('span');
                     layerNameSpan.className = 'flex-1 text-sm truncate';
                     layerNameSpan.textContent = layer.name;
-                    layerNameSpan.onclick = () => {
+                    layerItem.onclick = () => {
                         activeLayer = layer;
                         updateLayerPanel();
                     };
@@ -286,7 +305,8 @@
                         layer.delete();
                         const remainingLayers = oekaki.getLayers();
                         if (remainingLayers.length > 0) {
-                            activeLayer = remainingLayers.find(l => l.name !== layer.name) || remainingLayers[remainingLayers.length - 1];
+                            activeLayer = layer.above;
+                            if (!activeLayer) activeLayer = layer.below;
                         } else {
                             const newLayer = new oekaki.LayeredCanvas("レイヤー #1");
                             activeLayer = newLayer;
@@ -296,19 +316,8 @@
                     };
                     controls.appendChild(deleteButton);
 
-                    layerPanel.appendChild(layerItem);
+                    layersContainer.prepend(layerItem);
                 });
-
-                const addLayerButton = document.createElement('button');
-                addLayerButton.textContent = '＋ レイヤー追加';
-                addLayerButton.className = 'mt-3 p-2 bg-purple-700 hover:bg-purple-800 text-white rounded transition-colors w-full';
-                addLayerButton.onclick = () => {
-                    const layers = oekaki.getLayers();
-                    const newLayer = new oekaki.LayeredCanvas(`レイヤー #${layers.length + 1}`);
-                    activeLayer = newLayer;
-                    updateLayerPanel();
-                };
-                layerPanel.appendChild(addLayerButton);
             };
 
             const mdi2DataUrl = (iconName) => {
@@ -459,7 +468,7 @@
                 bgLayer.fill("#FFF");
                 bgLayer.trace();
 
-                const firstLayer = new oekaki.LayeredCanvas("レイヤー #1");
+                const firstLayer = new oekaki.LayeredCanvas("レイヤー #2");
                 activeLayer = firstLayer;
 
                 updateLayerPanel();
