@@ -100,13 +100,7 @@ const resetTranslation = () => {
  * 内部レイヤーリストは削除されると添え字そのままnullになるんやが
  * この関数はnullを除外したレイヤーリストを返すんやで
  */
-export const getLayers = (): LayeredCanvas[] => {
-	const layers = [];
-	for (const v of g_layers) {
-		if (v) layers.push(v);
-	}
-	return layers;
-};
+export const getLayers = () => g_layers.filter((v) => v !== null);
 
 const insertAfter = (sp1: HTMLCanvasElement, sp2: HTMLCanvasElement) =>
 	g_layer_container?.insertBefore(sp1, sp2.nextSibling);
@@ -355,16 +349,16 @@ export class LayeredCanvas {
 	/**
 	 * 1つ背面のレイヤー
 	 */
-	get prev(): LayeredCanvas | null {
-		const prev = g_layers.slice(0, this.index).findLast((v) => v);
-		return prev ? prev : null;
+	get below(): LayeredCanvas | null {
+		const layer = g_layers.slice(0, this.index).findLast((v) => v);
+		return layer ? layer : null;
 	}
 	/**
 	 * 1つ前面のレイヤー
 	 */
-	get next(): LayeredCanvas | null {
-		const next = g_layers.slice(this.index + 1).find((v) => v);
-		return next ? next : null;
+	get above(): LayeredCanvas | null {
+		const layer = g_layers.slice(this.index + 1).find((v) => v);
+		return layer ? layer : null;
 	}
 	/**
 	 * レイヤーの入れ替え

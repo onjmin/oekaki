@@ -249,6 +249,20 @@
                 header.textContent = 'レイヤー';
                 layerPanel.appendChild(header);
 
+                const addLayerButton = document.createElement('button');
+                addLayerButton.textContent = '＋ レイヤー追加';
+                addLayerButton.className = 'mt-3 p-2 bg-purple-700 hover:bg-purple-800 text-white rounded transition-colors w-full';
+                addLayerButton.onclick = () => {
+                    const newLayer = new oekaki.LayeredCanvas();
+                    newLayer.name = `レイヤー #${newLayer.index + 1}`;
+                    activeLayer = newLayer;
+                    updateLayerPanel();
+                };
+                layerPanel.appendChild(addLayerButton);
+
+                const layersContainer = document.createElement('div');
+                layerPanel.appendChild(layersContainer);
+
                 layers.forEach((layer, index) => {
                     const layerItem = document.createElement('div');
                     layerItem.className = 'flex items-center justify-between p-2 rounded-md transition-colors';
@@ -258,7 +272,7 @@
                     const layerNameSpan = document.createElement('span');
                     layerNameSpan.className = 'flex-1 text-sm truncate';
                     layerNameSpan.textContent = layer.name;
-                    layerNameSpan.onclick = () => {
+                    layerItem.onclick = () => {
                         activeLayer = layer;
                         updateLayerPanel();
                     };
@@ -291,7 +305,8 @@
                         layer.delete();
                         const remainingLayers = oekaki.getLayers();
                         if (remainingLayers.length > 0) {
-                            activeLayer = remainingLayers.find(l => l.name !== layer.name) || remainingLayers[remainingLayers.length - 1];
+                            activeLayer = layer.above;
+                            if (!activeLayer) activeLayer = layer.below;
                         } else {
                             const newLayer = new oekaki.LayeredCanvas("レイヤー #1");
                             activeLayer = newLayer;
@@ -301,19 +316,8 @@
                     };
                     controls.appendChild(deleteButton);
 
-                    layerPanel.appendChild(layerItem);
+                    layersContainer.prepend(layerItem);
                 });
-
-                const addLayerButton = document.createElement('button');
-                addLayerButton.textContent = '＋ レイヤー追加';
-                addLayerButton.className = 'mt-3 p-2 bg-purple-700 hover:bg-purple-800 text-white rounded transition-colors w-full';
-                addLayerButton.onclick = () => {
-                    const layers = oekaki.getLayers();
-                    const newLayer = new oekaki.LayeredCanvas(`レイヤー #${layers.length + 1}`);
-                    activeLayer = newLayer;
-                    updateLayerPanel();
-                };
-                layerPanel.appendChild(addLayerButton);
             };
 
             const mdi2DataUrl = (iconName) => {
@@ -464,7 +468,7 @@
                 bgLayer.fill("#FFF");
                 bgLayer.trace();
 
-                const firstLayer = new oekaki.LayeredCanvas("レイヤー #1");
+                const firstLayer = new oekaki.LayeredCanvas("レイヤー #2");
                 activeLayer = firstLayer;
 
                 updateLayerPanel();
