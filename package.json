@@ -1,6 +1,6 @@
 {
 	"author": "onjmin",
-	"license": "AGPL-3.0",
+	"license": "MIT",
 	"name": "@onjmin/oekaki",
 	"version": "1.0.58",
 	"description": "レイヤー概念があるお絵描きモジュール",
