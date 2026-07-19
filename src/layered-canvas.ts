@@ -92,6 +92,23 @@ const resetTranslation = () => {
 	offsetX = 0;
 	offsetY = 0;
 	translating = null;
+	resetSelectionMoveByDot();
+};
+
+let selMoveAccDx = 0;
+let selMoveAccDy = 0;
+let selMoveSnappedDx = 0;
+let selMoveSnappedDy = 0;
+/**
+ * moveSelectionByDot()の累積差分をリセット
+ *
+ * 新しいドラッグ操作の開始時や選択範囲そのものが変わったタイミングで呼ぶ
+ */
+const resetSelectionMoveByDot = () => {
+	selMoveAccDx = 0;
+	selMoveAccDy = 0;
+	selMoveSnappedDx = 0;
+	selMoveSnappedDy = 0;
 };
 
 /**
@@ -119,6 +136,7 @@ export const clearSelection = () => {
 	g_sel_rect = null;
 	g_sel_floating = null;
 	g_sel_base = null;
+	resetSelectionMoveByDot();
 	if (g_upper) g_upper.ctx.clearRect(0, 0, g_width, g_height);
 };
 
@@ -589,6 +607,22 @@ export class LayeredCanvas {
 		drawMarquee();
 	}
 	/**
+	 * ドット基準の範囲選択
+	 *
+	 * 始点・終点を1ドット単位のグリッド線にスナップしてから選択する
+	 * フラクショナルな位置で切れないので、ドット絵編集で綺麗に選択できるんやで
+	 */
+	selectByDot(x: number, y: number, w: number, h: number) {
+		if (!this.editable) return;
+		const size = g_dot_size;
+		const snap = (v: number) => Math.round(v / size) * size;
+		const sx = snap(x);
+		const sy = snap(y);
+		const ex = snap(x + w);
+		const ey = snap(y + h);
+		this.select(sx, sy, ex - sx, ey - sy);
+	}
+	/**
 	 * このレイヤーの選択範囲
 	 *
 	 * 他のレイヤーが選択中の場合や未選択の場合はnull
@@ -646,6 +680,30 @@ export class LayeredCanvas {
 		drawMarquee();
 	}
 	/**
+	 * ドット基準で選択範囲を移動
+	 *
+	 * translateByDot()と同様に、呼び出しをまたいで移動量を累積し
+	 * 1ドット分のグリッド線を跨いだ時だけ実際に移動させる
+	 * ドラッグ開始時やresetTranslation()呼び出し時に累積はリセットされる
+	 *
+	 * @param dx x差分
+	 * @param dy y差分
+	 */
+	moveSelectionByDot(dx: number, dy: number) {
+		if (!this.editable || g_sel_layer !== this || !g_sel_rect) return;
+		const size = g_dot_size;
+		selMoveAccDx += dx;
+		selMoveAccDy += dy;
+		const newSnappedDx = Math.round(selMoveAccDx / size) * size;
+		const newSnappedDy = Math.round(selMoveAccDy / size) * size;
+		const deltaDx = newSnappedDx - selMoveSnappedDx;
+		const deltaDy = newSnappedDy - selMoveSnappedDy;
+		if (deltaDx === 0 && deltaDy === 0) return;
+		this.moveSelection(deltaDx, deltaDy);
+		selMoveSnappedDx = newSnappedDx;
+		selMoveSnappedDy = newSnappedDy;
+	}
+	/**
 	 * 選択範囲の拡縮
 	 *
 	 * 左上を基準に選択範囲を指定サイズに変形する
@@ -659,6 +717,19 @@ export class LayeredCanvas {
 		g_sel_rect.h = Math.floor(h);
 		this.#renderFloating();
 		drawMarquee();
+	}
+	/**
+	 * ドット基準で選択範囲を拡縮
+	 *
+	 * 幅・高さを1ドット単位にスナップしてからresizeSelection()を呼ぶ
+	 * 最低でも1ドット分のサイズは確保される
+	 */
+	resizeSelectionByDot(w: number, h: number) {
+		if (!this.editable || g_sel_layer !== this || !g_sel_rect) return;
+		const size = g_dot_size;
+		const sw = Math.max(size, Math.round(w / size) * size);
+		const sh = Math.max(size, Math.round(h / size) * size);
+		this.resizeSelection(sw, sh);
 	}
 	/**
 	 * 選択範囲の削除
