@@ -311,6 +311,7 @@ export class LayeredCanvas {
 		canvas.style.zIndex = String(++g_serial_number); // 採番は1始まり
 		canvas.style.left = "0";
 		canvas.style.top = "0";
+		canvas.style.touchAction = "none"; // iOS Safari系でpointermoveが間引かれてドット状になるのを防ぐ
 		this.canvas = canvas;
 		const ctx = canvas.getContext("2d", { willReadFrequently: true }); // 頻繁にgetImageData()を呼び出すための最適化
 		if (!ctx) throw new Error("Failed to get 2D rendering context");
