@@ -138,6 +138,16 @@
             // 選択範囲の拡縮ハンドル（右下の四角いつまみ）
             const SELECTION_HANDLE_SIZE = 8; // 見た目の一辺(px)
             const SELECTION_HANDLE_HIT = 10; // 判定の半径(px)
+            // 選択範囲の回転ハンドル（上中央の丸いつまみ）
+            const ROTATE_HANDLE_OFFSET = 24; // 選択範囲上辺からの距離(px)
+            const ROTATE_HANDLE_RADIUS = 5; // 見た目の半径(px)
+            const ROTATE_HANDLE_HIT = 10; // 判定の半径(px)
+
+            const getRotateHandlePos = (sel) => ({
+                x: sel.x + sel.w / 2,
+                y: sel.y - ROTATE_HANDLE_OFFSET,
+            });
+
             const drawSelectionHandle = () => {
                 const sel = activeLayer?.selection;
                 const ctx = oekaki.upperLayer.value?.ctx;
@@ -150,6 +160,21 @@
                 ctx.lineWidth = 1;
                 ctx.fillRect(hx - SELECTION_HANDLE_SIZE / 2, hy - SELECTION_HANDLE_SIZE / 2, SELECTION_HANDLE_SIZE, SELECTION_HANDLE_SIZE);
                 ctx.strokeRect(hx - SELECTION_HANDLE_SIZE / 2, hy - SELECTION_HANDLE_SIZE / 2, SELECTION_HANDLE_SIZE, SELECTION_HANDLE_SIZE);
+
+                // 回転ハンドル（上中央から伸びる線＋丸いつまみ）
+                const cx = sel.x + sel.w / 2;
+                const rot = getRotateHandlePos(sel);
+                ctx.beginPath();
+                ctx.moveTo(cx, sel.y);
+                ctx.lineTo(rot.x, rot.y);
+                ctx.strokeStyle = '#000000';
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.arc(rot.x, rot.y, ROTATE_HANDLE_RADIUS, 0, Math.PI * 2);
+                ctx.fillStyle = '#ffffff';
+                ctx.fill();
+                ctx.strokeStyle = '#000000';
+                ctx.stroke();
                 ctx.restore();
             };
             const isNearSelectionHandle = (sel, x, y) => {
@@ -157,8 +182,31 @@
                 const hy = sel.y + sel.h;
                 return Math.abs(x - hx) <= SELECTION_HANDLE_HIT && Math.abs(y - hy) <= SELECTION_HANDLE_HIT;
             };
+            const isNearRotateHandle = (sel, x, y) => {
+                const rot = getRotateHandlePos(sel);
+                return Math.hypot(x - rot.x, y - rot.y) <= ROTATE_HANDLE_HIT;
+            };
             const isInsideSelection = (sel, x, y) =>
                 x >= sel.x && x <= sel.x + sel.w && y >= sel.y && y <= sel.y + sel.h;
+
+            // 自由選択（投げ縄）の下書き
+            let lassoPoints = [];
+            const drawLassoPreview = () => {
+                const ctx = oekaki.upperLayer.value?.ctx;
+                if (!ctx || lassoPoints.length < 2) return;
+                ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+                ctx.save();
+                ctx.lineWidth = 1;
+                ctx.setLineDash([4, 4]);
+                ctx.beginPath();
+                lassoPoints.forEach(([px, py], i) => i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py));
+                ctx.strokeStyle = '#ffffff';
+                ctx.stroke();
+                ctx.strokeStyle = '#000000';
+                ctx.lineDashOffset = 4;
+                ctx.stroke();
+                ctx.restore();
+            };
 
             const recentColors = ['#000000', '#FFFFFF'];
             const addRecentColors = () => {
@@ -179,6 +227,7 @@
                 fill: { label: "塗りつぶし", icon: mdi.mdiFormatColorFill },
                 translate: { label: "ハンドツール", icon: mdi.mdiHandBackRight },
                 select: { label: "範囲選択", icon: mdi.mdiSelectionDrag },
+                lasso: { label: "自由選択", icon: mdi.mdiVectorPolygon },
                 erasable: { label: "常に消しゴム", icon: mdi.mdiEraserVariant },
                 flip: { label: "左右反転", icon: mdi.mdiFlipHorizontal },
                 grid: { label: "グリッド線", icon: mdi.mdiGrid },
@@ -187,7 +236,9 @@
                 save: { label: "画像を保存", icon: mdi.mdiContentSaveOutline },
                 clear: { label: "全消し", icon: mdi.mdiTrashCanOutline },
                 copySelection: { label: "選択範囲をコピー", icon: mdi.mdiContentCopy },
-                deleteSelection: { label: "選択範囲を削除", icon: mdi.mdiSelectionOff }
+                deleteSelection: { label: "選択範囲を削除", icon: mdi.mdiSelectionOff },
+                rotateSelectionCCW: { label: "選択範囲を反時計回りに回転", icon: mdi.mdiRotateLeft },
+                rotateSelectionCW: { label: "選択範囲を時計回りに回転", icon: mdi.mdiRotateRight }
             };
 
             const updateToolOptions = () => {
@@ -272,11 +323,11 @@
                     sliderWrapper.appendChild(slider);
                 }
 
-                if (choicedTool !== tools.dropper.label && choicedTool !== tools.fill.label && choicedTool !== tools.translate.label && choicedTool !== tools.select.label) {
+                if (choicedTool !== tools.dropper.label && choicedTool !== tools.fill.label && choicedTool !== tools.translate.label && choicedTool !== tools.select.label && choicedTool !== tools.lasso.label) {
                     toolOptionsPanel.appendChild(sliderWrapper);
                 }
 
-                if (choicedTool === tools.select.label && activeLayer?.selection) {
+                if ((choicedTool === tools.select.label || choicedTool === tools.lasso.label) && activeLayer?.selection) {
                     const copyButton = createToolButton(tools.copySelection.label, tools.copySelection.icon, () => {
                         const copy = activeLayer.copySelection();
                         if (copy) internalClipboard = copy;
@@ -289,6 +340,24 @@
                         updateToolOptions();
                     });
                     toolOptionsPanel.appendChild(deleteButton);
+
+                    const rotate = (deltaAngle) => {
+                        if (isGrid) {
+                            // ドットがグリッドからずれないよう90度刻みでのみ回転する
+                            activeLayer.rotateSelectionByDot(deltaAngle);
+                        } else {
+                            activeLayer.rotateSelection(deltaAngle);
+                        }
+                        fin();
+                        drawSelectionHandle();
+                    };
+                    const rotateStep = isGrid ? 90 : 15;
+
+                    const rotateCCWButton = createToolButton(tools.rotateSelectionCCW.label, tools.rotateSelectionCCW.icon, () => rotate(-rotateStep));
+                    toolOptionsPanel.appendChild(rotateCCWButton);
+
+                    const rotateCWButton = createToolButton(tools.rotateSelectionCW.label, tools.rotateSelectionCW.icon, () => rotate(rotateStep));
+                    toolOptionsPanel.appendChild(rotateCWButton);
                 }
             };
 
@@ -420,6 +489,7 @@
                     case "5": { e.preventDefault(); choicedTool = tools.fill.label; break; }
                     case "6": { e.preventDefault(); choicedTool = tools.translate.label; break; }
                     case "7": { e.preventDefault(); choicedTool = tools.select.label; break; }
+                    case "8": { e.preventDefault(); choicedTool = tools.lasso.label; break; }
                     case "e": { e.preventDefault(); isErasable = !isErasable; updateToolButtons(); break; }
                     case "f": { e.preventDefault(); isFlipped = !isFlipped; oekaki.flipped.value = isFlipped; updateToolButtons(); break; }
                     case "g": { e.preventDefault(); isGrid = !isGrid; oekakiContainer.classList.toggle('grid', isGrid); updateToolButtons(); break; }
@@ -490,6 +560,19 @@
                     const dx = e.key === 'ArrowLeft' ? -step : e.key === 'ArrowRight' ? step : 0;
                     const dy = e.key === 'ArrowUp' ? -step : e.key === 'ArrowDown' ? step : 0;
                     activeLayer.moveSelection(dx, dy);
+                    fin();
+                    drawSelectionHandle();
+                } else if (e.key === '[' || e.key === ']') {
+                    // 選択範囲の回転（[ = 反時計回り, ] = 時計回り）
+                    e.preventDefault();
+                    const rotateStep = isGrid ? 90 : 15;
+                    const deltaAngle = e.key === '[' ? -rotateStep : rotateStep;
+                    if (isGrid) {
+                        // ドットがグリッドからずれないよう90度刻みでのみ回転する
+                        activeLayer.rotateSelectionByDot(deltaAngle);
+                    } else {
+                        activeLayer.rotateSelection(deltaAngle);
+                    }
                     fin();
                     drawSelectionHandle();
                 }
@@ -579,7 +662,7 @@
                 // ツールボタンの作成
                 toolPanel.innerHTML = '';
                 [
-                    tools.brush, tools.pen, tools.eraser, tools.dropper, tools.fill, tools.translate, tools.select,
+                    tools.brush, tools.pen, tools.eraser, tools.dropper, tools.fill, tools.translate, tools.select, tools.lasso,
                     separator,
                     tools.erasable, tools.flip, tools.grid,
                     separator,
@@ -651,11 +734,12 @@
                 let prevX = null;
                 let prevY = null;
                 let dropping = false;
-                let selectDragMode = null; // null | 'new' | 'move' | 'resize'
+                let selectDragMode = null; // null | 'new' | 'move' | 'resize' | 'rotate'
                 let selectStartX = 0;
                 let selectStartY = 0;
                 let selectAnchorX = 0; // resize時の固定される左上X
                 let selectAnchorY = 0; // resize時の固定される左上Y
+                let selectRotateLastAngle = 0; // rotate時の直前のポインタ角度[度]
 
                 oekaki.onDraw((x, y, buttons) => {
                     if (!activeLayer?.editable) return;
@@ -676,7 +760,12 @@
                         } else if (choicedTool === tools.select.label) {
                             if (selectDragMode === null) {
                                 const sel = activeLayer.selection;
-                                if (sel && isNearSelectionHandle(sel, x, y)) {
+                                if (sel && isNearRotateHandle(sel, x, y)) {
+                                    selectDragMode = 'rotate';
+                                    const cx = sel.x + sel.w / 2;
+                                    const cy = sel.y + sel.h / 2;
+                                    selectRotateLastAngle = Math.atan2(y - cy, x - cx) * 180 / Math.PI;
+                                } else if (sel && isNearSelectionHandle(sel, x, y)) {
                                     selectDragMode = 'resize';
                                     selectAnchorX = sel.x;
                                     selectAnchorY = sel.y;
@@ -688,7 +777,22 @@
                                     selectStartY = y;
                                 }
                             }
-                            if (selectDragMode === 'move') {
+                            if (selectDragMode === 'rotate') {
+                                const sel = activeLayer.selection;
+                                const cx = sel.x + sel.w / 2;
+                                const cy = sel.y + sel.h / 2;
+                                const angle = Math.atan2(y - cy, x - cx) * 180 / Math.PI;
+                                let deltaAngle = angle - selectRotateLastAngle;
+                                // -180〜180に正規化（真裏をまたいだ時の急激な回転を防ぐ）
+                                if (deltaAngle > 180) deltaAngle -= 360;
+                                if (deltaAngle < -180) deltaAngle += 360;
+                                if (isGrid) {
+                                    activeLayer.rotateSelectionByDot(deltaAngle);
+                                } else {
+                                    activeLayer.rotateSelection(deltaAngle);
+                                }
+                                selectRotateLastAngle = angle;
+                            } else if (selectDragMode === 'move') {
                                 if (isGrid) {
                                     activeLayer.moveSelectionByDot(x - prevX, y - prevY);
                                 } else {
@@ -708,6 +812,9 @@
                                 activeLayer.select(selectStartX, selectStartY, x - selectStartX, y - selectStartY);
                             }
                             drawSelectionHandle();
+                        } else if (choicedTool === tools.lasso.label) {
+                            lassoPoints.push([x, y]);
+                            drawLassoPreview();
                         } else {
                             const lerps = oekaki.lerp(x, y, prevX, prevY);
                             switch (choicedTool) {
@@ -744,6 +851,24 @@
                         selectDragMode = null;
                         updateToolOptions();
                     }
+                    if (choicedTool === tools.lasso.label) {
+                        if (activeLayer?.editable && lassoPoints.length >= 3) {
+                            if (isGrid) {
+                                activeLayer.selectFreehandByDot(lassoPoints);
+                            } else {
+                                activeLayer.selectFreehand(lassoPoints);
+                            }
+                            // 選択直後にそのまま範囲選択ツールへ切り替える
+                            // （自由選択ツールのままだと、次のドラッグが新規選択と解釈され
+                            //   移動・拡縮・回転しようとした操作で選択が消えてしまうため）
+                            choicedTool = tools.select.label;
+                            const canvas = oekaki.upperLayer.value.canvas;
+                            canvas.style.cursor = `url('${mdi2DataUrl(tools.select.icon)}') 3 21, auto`;
+                            updateToolButtons();
+                            drawSelectionHandle();
+                        }
+                        lassoPoints = [];
+                    }
                     if (!activeLayer?.editable) return;
                     if (choicedTool === tools.fill.label && !dropping) fill(x, y);
                     dropping = false;
@@ -764,7 +889,9 @@
                         return;
                     }
                     const [x, y] = oekaki.getXY(e);
-                    if (isNearSelectionHandle(sel, x, y)) {
+                    if (isNearRotateHandle(sel, x, y)) {
+                        canvas.style.cursor = `url('${mdi2DataUrl(mdi.mdiRotateRight)}') 12 12, auto`;
+                    } else if (isNearSelectionHandle(sel, x, y)) {
                         canvas.style.cursor = 'nwse-resize';
                     } else if (isInsideSelection(sel, x, y)) {
                         canvas.style.cursor = 'move';

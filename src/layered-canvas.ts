@@ -93,6 +93,7 @@ const resetTranslation = () => {
 	offsetY = 0;
 	translating = null;
 	resetSelectionMoveByDot();
+	resetSelectionRotateByDot();
 };
 
 let selMoveAccDx = 0;
@@ -111,6 +112,18 @@ const resetSelectionMoveByDot = () => {
 	selMoveSnappedDy = 0;
 };
 
+let selRotateAcc = 0;
+let selRotateSnapped = 0;
+/**
+ * rotateSelectionByDot()の累積角度をリセット
+ *
+ * 新しいドラッグ操作の開始時や選択範囲そのものが変わったタイミングで呼ぶ
+ */
+const resetSelectionRotateByDot = () => {
+	selRotateAcc = 0;
+	selRotateSnapped = 0;
+};
+
 /**
  * 範囲選択の矩形
  */
@@ -125,6 +138,11 @@ let g_sel_layer: LayeredCanvas | null = null;
 let g_sel_rect: SelectionRect | null = null;
 let g_sel_floating: HTMLCanvasElement | null = null; // レイヤーから浮かせた選択範囲の画像
 let g_sel_base: ImageData | null = null; // 浮かせた部分を除いたレイヤーの画像
+let g_sel_angle = 0; // 選択範囲の回転角度[度]。常にg_sel_floating（原本）からの絶対角度
+let g_sel_pixelated = false; // ドット基準の操作（*ByDot系）が一度でも行われたか。trueの間は補間せずニアレストネイバーで描画する
+let g_sel_mask: HTMLCanvasElement | null = null; // 自由形状選択のマスク（矩形選択時はnull）。選択時点のg_sel_rectと同サイズ
+let g_sel_points: [number, number][] | null = null; // 自由形状選択の頂点（選択時点の絶対座標）。矩形選択時はnull
+let g_sel_origin: SelectionRect | null = null; // 自由形状選択時点の矩形。以後の移動・拡縮・回転の基準として使う
 
 /**
  * 選択範囲の解除（全レイヤー共通）
@@ -136,26 +154,60 @@ export const clearSelection = () => {
 	g_sel_rect = null;
 	g_sel_floating = null;
 	g_sel_base = null;
+	g_sel_angle = 0;
+	g_sel_pixelated = false;
+	g_sel_mask = null;
+	g_sel_points = null;
+	g_sel_origin = null;
 	resetSelectionMoveByDot();
+	resetSelectionRotateByDot();
 	if (g_upper) g_upper.ctx.clearRect(0, 0, g_width, g_height);
 };
 
 /**
  * 選択範囲の点線枠を最前面のレイヤーに描く
+ *
+ * 自由形状選択の場合は選択時点の頂点を現在の移動・拡縮・回転量に合わせて変形してから描く
+ * （g_sel_floatingのラスター変形と同じ計算をして、見た目を一致させる）
  */
 const drawMarquee = () => {
 	const ctx = g_upper.ctx;
 	ctx.clearRect(0, 0, g_width, g_height);
 	if (!g_sel_rect) return;
-	const { x, y, w, h } = g_sel_rect;
 	ctx.save();
 	ctx.lineWidth = 1;
 	ctx.setLineDash([4, 4]);
+	ctx.beginPath();
+	if (g_sel_points && g_sel_origin) {
+		const { x, y, w, h } = g_sel_rect;
+		const { x: ox, y: oy, w: ow, h: oh } = g_sel_origin;
+		const scaleX = ow > 0 ? w / ow : 1;
+		const scaleY = oh > 0 ? h / oh : 1;
+		const cx = x + w / 2;
+		const cy = y + h / 2;
+		const ocx = ox + ow / 2;
+		const ocy = oy + oh / 2;
+		const rad = (g_sel_angle * Math.PI) / 180;
+		const cos = Math.cos(rad);
+		const sin = Math.sin(rad);
+		g_sel_points.forEach(([px, py], i) => {
+			const rx = (px - ocx) * scaleX;
+			const ry = (py - ocy) * scaleY;
+			const tx = cx + rx * cos - ry * sin;
+			const ty = cy + rx * sin + ry * cos;
+			if (i === 0) ctx.moveTo(tx, ty);
+			else ctx.lineTo(tx, ty);
+		});
+		ctx.closePath();
+	} else {
+		const { x, y, w, h } = g_sel_rect;
+		ctx.rect(x + 0.5, y + 0.5, w - 1, h - 1);
+	}
 	ctx.strokeStyle = "#ffffff";
-	ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+	ctx.stroke();
 	ctx.strokeStyle = "#000000";
 	ctx.lineDashOffset = 4;
-	ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+	ctx.stroke();
 	ctx.restore();
 };
 
@@ -222,6 +274,11 @@ export const init = (mountTarget: HTMLElement, width = 640, height = 360) => {
 	g_sel_rect = null;
 	g_sel_floating = null;
 	g_sel_base = null;
+	g_sel_angle = 0;
+	g_sel_pixelated = false;
+	g_sel_mask = null;
+	g_sel_points = null;
+	g_sel_origin = null;
 	g_lower = new LayeredCanvas(""); // 1
 	g_upper = new LayeredCanvas(""); // 2 (永久欠番)
 	g_upper.canvas.style.zIndex = String(2 ** 16 + 3); // レイヤー上限枚数の仮設定65536枚
@@ -620,7 +677,118 @@ export class LayeredCanvas {
 		const sy = snap(y);
 		const ex = snap(x + w);
 		const ey = snap(y + h);
-		this.select(sx, sy, ex - sx, ey - sy);
+		this.select(sx, sy, ex - sx, ey - sy); // 内部でclearSelection()が呼ばれるため、フラグはこの後に立てる
+		if (g_sel_layer === this) g_sel_pixelated = true;
+	}
+	/**
+	 * 自由形状（フリーハンド）の範囲選択
+	 *
+	 * 頂点列で囲まれた領域を選択する。頂点は自動的に閉じられる（始点と終点を繋ぐ）
+	 * 内部的にはバウンディングボックスと同サイズのマスクを作り、以後の移動・拡縮・回転・削除・コピーは
+	 * すべてこのマスクの形状に沿って行われる
+	 *
+	 * @param points 選択したい領域を囲む頂点列（キャンバス座標）。3点未満は無視される
+	 */
+	selectFreehand(points: [number, number][]) {
+		if (!this.editable) return;
+		if (points.length < 3) return;
+		clearSelection();
+		let minX = Number.POSITIVE_INFINITY;
+		let minY = Number.POSITIVE_INFINITY;
+		let maxX = Number.NEGATIVE_INFINITY;
+		let maxY = Number.NEGATIVE_INFINITY;
+		for (const [px, py] of points) {
+			minX = Math.min(minX, px);
+			minY = Math.min(minY, py);
+			maxX = Math.max(maxX, px);
+			maxY = Math.max(maxY, py);
+		}
+		const x1 = Math.max(0, Math.floor(minX));
+		const y1 = Math.max(0, Math.floor(minY));
+		const x2 = Math.min(g_width, Math.ceil(maxX));
+		const y2 = Math.min(g_height, Math.ceil(maxY));
+		if (x2 - x1 < 1 || y2 - y1 < 1) return;
+		const w = x2 - x1;
+		const h = y2 - y1;
+		const mask = document.createElement("canvas");
+		mask.width = w;
+		mask.height = h;
+		const mctx = mask.getContext("2d");
+		if (!mctx) return;
+		mctx.fillStyle = "#fff";
+		mctx.beginPath();
+		mctx.moveTo(points[0][0] - x1, points[0][1] - y1);
+		for (const [px, py] of points.slice(1)) mctx.lineTo(px - x1, py - y1);
+		mctx.closePath();
+		mctx.fill();
+		g_sel_layer = this;
+		g_sel_rect = { x: x1, y: y1, w, h };
+		g_sel_mask = mask;
+		g_sel_points = points.map(([px, py]) => [px, py]);
+		g_sel_origin = { x: x1, y: y1, w, h };
+		drawMarquee();
+	}
+	/**
+	 * ドット基準の自由形状選択
+	 *
+	 * 各頂点を1ドット単位のグリッド線にスナップしてからselectFreehand()を呼ぶ
+	 * フラクショナルな位置で輪郭が切れないので、ドット絵編集で綺麗に選択できる
+	 * 隣接する頂点同士を単純にスナップして繋ぐと斜め45度の辺ができてしまうため、
+	 * 各辺の間に直角の角を挟んで階段状（水平・垂直のみ）の輪郭になるよう補正する
+	 * 始点と終点を結ぶ閉じる辺にも同様の補正を行う
+	 */
+	selectFreehandByDot(points: [number, number][]) {
+		if (!this.editable) return;
+		if (points.length < 3) return;
+		const size = g_dot_size;
+		const snap = (v: number) => Math.round(v / size) * size;
+		// 斜めになる辺の間に、元の移動方向が大きい軸を優先した直角の角を挟む
+		const rightAngleCorner = (
+			from: [number, number],
+			fromRaw: [number, number],
+			to: [number, number],
+			toRaw: [number, number],
+		): [number, number] | null => {
+			if (from[0] === to[0] || from[1] === to[1]) return null;
+			const dx = toRaw[0] - fromRaw[0];
+			const dy = toRaw[1] - fromRaw[1];
+			return Math.abs(dx) >= Math.abs(dy) ? [to[0], from[1]] : [from[0], to[1]];
+		};
+		const snappedPoints: [number, number][] = [];
+		let prevRaw: [number, number] | null = null;
+		let prevSnapped: [number, number] | null = null;
+		for (const [px, py] of points) {
+			const snapped: [number, number] = [snap(px), snap(py)];
+			if (prevSnapped && prevRaw) {
+				const corner = rightAngleCorner(prevSnapped, prevRaw, snapped, [
+					px,
+					py,
+				]);
+				if (corner) snappedPoints.push(corner);
+			}
+			if (
+				!prevSnapped ||
+				snapped[0] !== prevSnapped[0] ||
+				snapped[1] !== prevSnapped[1]
+			) {
+				snappedPoints.push(snapped);
+			}
+			prevRaw = [px, py];
+			prevSnapped = snapped;
+		}
+		if (snappedPoints.length >= 2) {
+			const first = snappedPoints[0];
+			const last = snappedPoints[snappedPoints.length - 1];
+			const corner = rightAngleCorner(
+				last,
+				points[points.length - 1],
+				first,
+				points[0],
+			);
+			if (corner) snappedPoints.push(corner);
+		}
+		this.selectFreehand(snappedPoints); // 内部でclearSelection()が呼ばれるため、フラグはこの後に立てる
+		if (g_sel_layer === this) g_sel_pixelated = true;
 	}
 	/**
 	 * このレイヤーの選択範囲
@@ -640,7 +808,8 @@ export class LayeredCanvas {
 	/**
 	 * 選択範囲の画素をレイヤーから浮かせる
 	 *
-	 * 最初の移動・拡縮の時に1回だけ実行される
+	 * 最初の移動・拡縮・回転の時に1回だけ実行される
+	 * 自由形状選択（g_sel_mask）の場合は、マスクの形状に沿ってのみ浮かせる・消す
 	 */
 	#lift() {
 		if (g_sel_floating || !g_sel_rect) return;
@@ -651,19 +820,41 @@ export class LayeredCanvas {
 		const ctx = floating.getContext("2d");
 		if (!ctx) throw new Error("Failed to get 2D rendering context");
 		ctx.drawImage(this.canvas, x, y, w, h, 0, 0, w, h);
-		this.ctx.clearRect(x, y, w, h);
+		if (g_sel_mask) {
+			ctx.globalCompositeOperation = "destination-in";
+			ctx.drawImage(g_sel_mask, 0, 0);
+			ctx.globalCompositeOperation = "source-over";
+		}
+		if (g_sel_mask) {
+			this.ctx.save();
+			this.ctx.globalCompositeOperation = "destination-out";
+			this.ctx.drawImage(g_sel_mask, x, y);
+			this.ctx.restore();
+		} else {
+			this.ctx.clearRect(x, y, w, h);
+		}
 		g_sel_base = this.ctx.getImageData(0, 0, g_width, g_height);
 		g_sel_floating = floating;
 	}
 	/**
 	 * 浮かせた画素をレイヤーに反映する
+	 *
+	 * 常にg_sel_floating（原本）から描き直すため、移動・拡縮・回転を繰り返しても画質は劣化しない
+	 * g_sel_pixelated中は補間を無効化し、ニアレストネイバーでドット感を保ったまま描画する
 	 */
 	#renderFloating() {
 		if (!g_sel_rect || !g_sel_base || !g_sel_floating) return;
 		const { x, y, w, h } = g_sel_rect;
 		this.ctx.clearRect(0, 0, g_width, g_height);
 		this.ctx.putImageData(g_sel_base, 0, 0);
-		this.ctx.drawImage(g_sel_floating, x, y, w, h);
+		const cx = x + w / 2;
+		const cy = y + h / 2;
+		this.ctx.save();
+		this.ctx.imageSmoothingEnabled = !g_sel_pixelated;
+		this.ctx.translate(cx, cy);
+		this.ctx.rotate((g_sel_angle * Math.PI) / 180);
+		this.ctx.drawImage(g_sel_floating, -w / 2, -h / 2, w, h);
+		this.ctx.restore();
 	}
 	/**
 	 * 選択範囲の移動
@@ -685,12 +876,14 @@ export class LayeredCanvas {
 	 * translateByDot()と同様に、呼び出しをまたいで移動量を累積し
 	 * 1ドット分のグリッド線を跨いだ時だけ実際に移動させる
 	 * ドラッグ開始時やresetTranslation()呼び出し時に累積はリセットされる
+	 * 以降このレイヤーの選択範囲はニアレストネイバーで描画され、ドット感を保つ
 	 *
 	 * @param dx x差分
 	 * @param dy y差分
 	 */
 	moveSelectionByDot(dx: number, dy: number) {
 		if (!this.editable || g_sel_layer !== this || !g_sel_rect) return;
+		g_sel_pixelated = true;
 		const size = g_dot_size;
 		selMoveAccDx += dx;
 		selMoveAccDy += dy;
@@ -723,18 +916,59 @@ export class LayeredCanvas {
 	 *
 	 * 幅・高さを1ドット単位にスナップしてからresizeSelection()を呼ぶ
 	 * 最低でも1ドット分のサイズは確保される
+	 * 以降このレイヤーの選択範囲はニアレストネイバーで描画され、ドット感を保つ
 	 */
 	resizeSelectionByDot(w: number, h: number) {
 		if (!this.editable || g_sel_layer !== this || !g_sel_rect) return;
+		g_sel_pixelated = true;
 		const size = g_dot_size;
 		const sw = Math.max(size, Math.round(w / size) * size);
 		const sh = Math.max(size, Math.round(h / size) * size);
 		this.resizeSelection(sw, sh);
 	}
 	/**
+	 * 選択範囲の回転
+	 *
+	 * 選択範囲の中心を軸に、常に最初に浮かせた画像（原本）を基準として回転する
+	 * 拡縮と同様に繰り返し呼んでも画質は劣化しない
+	 * 選択範囲のw,h（バウンディングボックス）自体は変化しない
+	 *
+	 * @param deltaAngle 加算する回転角度[度]
+	 */
+	rotateSelection(deltaAngle: number) {
+		if (!this.editable || g_sel_layer !== this || !g_sel_rect) return;
+		this.#lift();
+		g_sel_angle = (g_sel_angle + deltaAngle) % 360;
+		this.#renderFloating();
+		drawMarquee();
+	}
+	/**
+	 * ドット基準で選択範囲を回転
+	 *
+	 * moveSelectionByDot()と同様に回転量を累積し、90度のグリッド線を跨いだ時だけ実際に回転させる
+	 * 90度刻み固定（0/90/180/270度）。中途半端な角度で回転するとドットがグリッドからずれてしまうため
+	 * 描画はニアレストネイバー（補間なし）になり、90度刻みなら画素がずれずクッキリ保たれる
+	 * #renderFloating()は常にg_sel_floating（原本）から再計算するため、繰り返し回転しても劣化しない
+	 * ドラッグ開始時やresetTranslation()呼び出し時に累積はリセットされる
+	 *
+	 * @param deltaAngle 加算する回転角度[度]
+	 */
+	rotateSelectionByDot(deltaAngle: number) {
+		if (!this.editable || g_sel_layer !== this || !g_sel_rect) return;
+		const step = 90;
+		g_sel_pixelated = true;
+		selRotateAcc += deltaAngle;
+		const newSnapped = Math.round(selRotateAcc / step) * step;
+		const delta = newSnapped - selRotateSnapped;
+		if (delta === 0) return;
+		this.rotateSelection(delta);
+		selRotateSnapped = newSnapped;
+	}
+	/**
 	 * 選択範囲の削除
 	 *
 	 * 選択範囲内の画素を消す。選択枠自体は残る
+	 * 自由形状選択の場合は、マスクの形状に沿った部分だけが消える
 	 */
 	deleteSelection() {
 		if (!this.editable || g_sel_layer !== this || !g_sel_rect) return;
@@ -745,13 +979,21 @@ export class LayeredCanvas {
 			g_sel_base = null;
 		} else {
 			const { x, y, w, h } = g_sel_rect;
-			this.ctx.clearRect(x, y, w, h);
+			if (g_sel_mask) {
+				this.ctx.save();
+				this.ctx.globalCompositeOperation = "destination-out";
+				this.ctx.drawImage(g_sel_mask, x, y);
+				this.ctx.restore();
+			} else {
+				this.ctx.clearRect(x, y, w, h);
+			}
 		}
 	}
 	/**
 	 * 選択範囲の複製
 	 *
 	 * paste()にそのまま渡せるcanvasを返す。レイヤーは変更されない
+	 * 自由形状選択の場合は、マスクの形状に沿った部分だけが複製される（マスク外は透明）
 	 */
 	copySelection(): HTMLCanvasElement | null {
 		if (g_sel_layer !== this || !g_sel_rect) return null;
@@ -765,6 +1007,11 @@ export class LayeredCanvas {
 			ctx.drawImage(g_sel_floating, 0, 0, w, h);
 		} else {
 			ctx.drawImage(this.canvas, x, y, w, h, 0, 0, w, h);
+			if (g_sel_mask) {
+				ctx.globalCompositeOperation = "destination-in";
+				ctx.drawImage(g_sel_mask, 0, 0);
+				ctx.globalCompositeOperation = "source-over";
+			}
 		}
 		return copy;
 	}
