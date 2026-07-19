@@ -95,6 +95,53 @@ const resetTranslation = () => {
 };
 
 /**
+ * 範囲選択の矩形
+ */
+export type SelectionRect = {
+	x: number;
+	y: number;
+	w: number;
+	h: number;
+};
+
+let g_sel_layer: LayeredCanvas | null = null;
+let g_sel_rect: SelectionRect | null = null;
+let g_sel_floating: HTMLCanvasElement | null = null; // レイヤーから浮かせた選択範囲の画像
+let g_sel_base: ImageData | null = null; // 浮かせた部分を除いたレイヤーの画像
+
+/**
+ * 選択範囲の解除（全レイヤー共通）
+ *
+ * 浮いている選択範囲はレイヤーに反映済みのため、状態を破棄するだけでええんやで
+ */
+export const clearSelection = () => {
+	g_sel_layer = null;
+	g_sel_rect = null;
+	g_sel_floating = null;
+	g_sel_base = null;
+	if (g_upper) g_upper.ctx.clearRect(0, 0, g_width, g_height);
+};
+
+/**
+ * 選択範囲の点線枠を最前面のレイヤーに描く
+ */
+const drawMarquee = () => {
+	const ctx = g_upper.ctx;
+	ctx.clearRect(0, 0, g_width, g_height);
+	if (!g_sel_rect) return;
+	const { x, y, w, h } = g_sel_rect;
+	ctx.save();
+	ctx.lineWidth = 1;
+	ctx.setLineDash([4, 4]);
+	ctx.strokeStyle = "#ffffff";
+	ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+	ctx.strokeStyle = "#000000";
+	ctx.lineDashOffset = 4;
+	ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+	ctx.restore();
+};
+
+/**
  * レイヤーリストを取得
  *
  * 内部レイヤーリストは削除されると添え字そのままnullになるんやが
@@ -153,6 +200,10 @@ export const init = (mountTarget: HTMLElement, width = 640, height = 360) => {
 	layerContainer.style.width = `${width}px`;
 	layerContainer.style.height = `${height}px`;
 	g_serial_number = 0;
+	g_sel_layer = null;
+	g_sel_rect = null;
+	g_sel_floating = null;
+	g_sel_base = null;
 	g_lower = new LayeredCanvas(""); // 1
 	g_upper = new LayeredCanvas(""); // 2 (永久欠番)
 	g_upper.canvas.style.zIndex = String(2 ** 16 + 3); // レイヤー上限枚数の仮設定65536枚
@@ -344,6 +395,7 @@ export class LayeredCanvas {
 	 * レイヤーの削除
 	 */
 	delete() {
+		this.deselect();
 		g_layers[this.index] = null; // 欠番
 		this.canvas.remove();
 	}
@@ -475,6 +527,8 @@ export class LayeredCanvas {
 	}
 	/**
 	 * 貼り付け
+	 *
+	 * 貼り付け直後は選択状態になり、そのまま移動・拡縮・削除できるんやで
 	 */
 	paste(
 		image:
@@ -485,13 +539,163 @@ export class LayeredCanvas {
 			| OffscreenCanvas,
 	) {
 		if (!this.editable) return;
+		clearSelection();
 		const { width, height } = image;
 		const ratio = Math.min(g_width / width, g_height / height);
 		const w = (width * ratio) | 0;
 		const h = (height * ratio) | 0;
 		const offsetX = (g_width - w) >> 1;
 		const offsetY = (g_height - h) >> 1;
+		const base = this.ctx.getImageData(0, 0, g_width, g_height);
 		this.ctx.drawImage(image, offsetX, offsetY, w, h);
+		const floating = document.createElement("canvas");
+		floating.width = width;
+		floating.height = height;
+		const ctx = floating.getContext("2d");
+		if (!ctx) return;
+		ctx.drawImage(image, 0, 0, width, height);
+		g_sel_layer = this;
+		g_sel_rect = { x: offsetX, y: offsetY, w, h };
+		g_sel_floating = floating;
+		g_sel_base = base;
+		drawMarquee();
+	}
+	/**
+	 * 範囲選択
+	 *
+	 * 幅・高さが負の場合は正規化し、キャンバス外は切り詰める
+	 * 既存の選択範囲は解除される
+	 */
+	select(x: number, y: number, w: number, h: number) {
+		if (!this.editable) return;
+		clearSelection();
+		let left = x;
+		let top = y;
+		if (w < 0) {
+			left += w;
+			w = -w;
+		}
+		if (h < 0) {
+			top += h;
+			h = -h;
+		}
+		const x1 = Math.max(0, Math.floor(left));
+		const y1 = Math.max(0, Math.floor(top));
+		const x2 = Math.min(g_width, Math.ceil(left + w));
+		const y2 = Math.min(g_height, Math.ceil(top + h));
+		if (x2 - x1 < 1 || y2 - y1 < 1) return;
+		g_sel_layer = this;
+		g_sel_rect = { x: x1, y: y1, w: x2 - x1, h: y2 - y1 };
+		drawMarquee();
+	}
+	/**
+	 * このレイヤーの選択範囲
+	 *
+	 * 他のレイヤーが選択中の場合や未選択の場合はnull
+	 */
+	get selection(): SelectionRect | null {
+		return g_sel_layer === this && g_sel_rect ? { ...g_sel_rect } : null;
+	}
+	/**
+	 * 選択範囲の解除
+	 */
+	deselect() {
+		if (g_sel_layer !== this) return;
+		clearSelection();
+	}
+	/**
+	 * 選択範囲の画素をレイヤーから浮かせる
+	 *
+	 * 最初の移動・拡縮の時に1回だけ実行される
+	 */
+	#lift() {
+		if (g_sel_floating || !g_sel_rect) return;
+		const { x, y, w, h } = g_sel_rect;
+		const floating = document.createElement("canvas");
+		floating.width = w;
+		floating.height = h;
+		const ctx = floating.getContext("2d");
+		if (!ctx) throw new Error("Failed to get 2D rendering context");
+		ctx.drawImage(this.canvas, x, y, w, h, 0, 0, w, h);
+		this.ctx.clearRect(x, y, w, h);
+		g_sel_base = this.ctx.getImageData(0, 0, g_width, g_height);
+		g_sel_floating = floating;
+	}
+	/**
+	 * 浮かせた画素をレイヤーに反映する
+	 */
+	#renderFloating() {
+		if (!g_sel_rect || !g_sel_base || !g_sel_floating) return;
+		const { x, y, w, h } = g_sel_rect;
+		this.ctx.clearRect(0, 0, g_width, g_height);
+		this.ctx.putImageData(g_sel_base, 0, 0);
+		this.ctx.drawImage(g_sel_floating, x, y, w, h);
+	}
+	/**
+	 * 選択範囲の移動
+	 *
+	 * @param dx x差分
+	 * @param dy y差分
+	 */
+	moveSelection(dx: number, dy: number) {
+		if (!this.editable || g_sel_layer !== this || !g_sel_rect) return;
+		this.#lift();
+		g_sel_rect.x += dx;
+		g_sel_rect.y += dy;
+		this.#renderFloating();
+		drawMarquee();
+	}
+	/**
+	 * 選択範囲の拡縮
+	 *
+	 * 左上を基準に選択範囲を指定サイズに変形する
+	 * 拡縮は常に最初に浮かせた画像から行われるため、繰り返しても画質は劣化しない
+	 */
+	resizeSelection(w: number, h: number) {
+		if (!this.editable || g_sel_layer !== this || !g_sel_rect) return;
+		if (w < 1 || h < 1) return;
+		this.#lift();
+		g_sel_rect.w = Math.floor(w);
+		g_sel_rect.h = Math.floor(h);
+		this.#renderFloating();
+		drawMarquee();
+	}
+	/**
+	 * 選択範囲の削除
+	 *
+	 * 選択範囲内の画素を消す。選択枠自体は残る
+	 */
+	deleteSelection() {
+		if (!this.editable || g_sel_layer !== this || !g_sel_rect) return;
+		if (g_sel_floating && g_sel_base) {
+			this.ctx.clearRect(0, 0, g_width, g_height);
+			this.ctx.putImageData(g_sel_base, 0, 0);
+			g_sel_floating = null;
+			g_sel_base = null;
+		} else {
+			const { x, y, w, h } = g_sel_rect;
+			this.ctx.clearRect(x, y, w, h);
+		}
+	}
+	/**
+	 * 選択範囲の複製
+	 *
+	 * paste()にそのまま渡せるcanvasを返す。レイヤーは変更されない
+	 */
+	copySelection(): HTMLCanvasElement | null {
+		if (g_sel_layer !== this || !g_sel_rect) return null;
+		const { x, y, w, h } = g_sel_rect;
+		const copy = document.createElement("canvas");
+		copy.width = w;
+		copy.height = h;
+		const ctx = copy.getContext("2d");
+		if (!ctx) return null;
+		if (g_sel_floating) {
+			ctx.drawImage(g_sel_floating, 0, 0, w, h);
+		} else {
+			ctx.drawImage(this.canvas, x, y, w, h, 0, 0, w, h);
+		}
+		return copy;
 	}
 	/**
 	 * ドット基準で平行移動

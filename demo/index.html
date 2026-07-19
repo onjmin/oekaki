@@ -120,11 +120,45 @@
             let penSize = 4;
             let eraserSize = 16;
             let dotPenScale = 1;
+            let internalClipboard = null; // 選択範囲のコピー用（OSクリップボードとは別）
 
             oekaki.color.value = currentColor;
             oekaki.penSize.value = penSize;
             oekaki.brushSize.value = brushSize;
             oekaki.eraserSize.value = eraserSize;
+
+            const fin = () => {
+                if (activeLayer?.modified()) {
+                    activeLayer.trace();
+                    addRecentColors();
+                    updateToolOptions();
+                }
+            };
+
+            // 選択範囲の拡縮ハンドル（右下の四角いつまみ）
+            const SELECTION_HANDLE_SIZE = 8; // 見た目の一辺(px)
+            const SELECTION_HANDLE_HIT = 10; // 判定の半径(px)
+            const drawSelectionHandle = () => {
+                const sel = activeLayer?.selection;
+                const ctx = oekaki.upperLayer.value?.ctx;
+                if (!sel || !ctx) return;
+                const hx = sel.x + sel.w;
+                const hy = sel.y + sel.h;
+                ctx.save();
+                ctx.fillStyle = '#ffffff';
+                ctx.strokeStyle = '#000000';
+                ctx.lineWidth = 1;
+                ctx.fillRect(hx - SELECTION_HANDLE_SIZE / 2, hy - SELECTION_HANDLE_SIZE / 2, SELECTION_HANDLE_SIZE, SELECTION_HANDLE_SIZE);
+                ctx.strokeRect(hx - SELECTION_HANDLE_SIZE / 2, hy - SELECTION_HANDLE_SIZE / 2, SELECTION_HANDLE_SIZE, SELECTION_HANDLE_SIZE);
+                ctx.restore();
+            };
+            const isNearSelectionHandle = (sel, x, y) => {
+                const hx = sel.x + sel.w;
+                const hy = sel.y + sel.h;
+                return Math.abs(x - hx) <= SELECTION_HANDLE_HIT && Math.abs(y - hy) <= SELECTION_HANDLE_HIT;
+            };
+            const isInsideSelection = (sel, x, y) =>
+                x >= sel.x && x <= sel.x + sel.w && y >= sel.y && y <= sel.y + sel.h;
 
             const recentColors = ['#000000', '#FFFFFF'];
             const addRecentColors = () => {
@@ -144,13 +178,16 @@
                 dropper: { label: "カラーピッカー", icon: mdi.mdiEyedropper },
                 fill: { label: "塗りつぶし", icon: mdi.mdiFormatColorFill },
                 translate: { label: "ハンドツール", icon: mdi.mdiHandBackRight },
+                select: { label: "範囲選択", icon: mdi.mdiSelectionDrag },
                 erasable: { label: "常に消しゴム", icon: mdi.mdiEraserVariant },
                 flip: { label: "左右反転", icon: mdi.mdiFlipHorizontal },
                 grid: { label: "グリッド線", icon: mdi.mdiGrid },
                 undo: { label: "戻る", icon: mdi.mdiUndo },
                 redo: { label: "進む", icon: mdi.mdiRedo },
                 save: { label: "画像を保存", icon: mdi.mdiContentSaveOutline },
-                clear: { label: "全消し", icon: mdi.mdiTrashCanOutline }
+                clear: { label: "全消し", icon: mdi.mdiTrashCanOutline },
+                copySelection: { label: "選択範囲をコピー", icon: mdi.mdiContentCopy },
+                deleteSelection: { label: "選択範囲を削除", icon: mdi.mdiSelectionOff }
             };
 
             const updateToolOptions = () => {
@@ -235,8 +272,23 @@
                     sliderWrapper.appendChild(slider);
                 }
 
-                if (choicedTool !== tools.dropper.label && choicedTool !== tools.fill.label && choicedTool !== tools.translate.label) {
+                if (choicedTool !== tools.dropper.label && choicedTool !== tools.fill.label && choicedTool !== tools.translate.label && choicedTool !== tools.select.label) {
                     toolOptionsPanel.appendChild(sliderWrapper);
+                }
+
+                if (choicedTool === tools.select.label && activeLayer?.selection) {
+                    const copyButton = createToolButton(tools.copySelection.label, tools.copySelection.icon, () => {
+                        const copy = activeLayer.copySelection();
+                        if (copy) internalClipboard = copy;
+                    });
+                    toolOptionsPanel.appendChild(copyButton);
+
+                    const deleteButton = createToolButton(tools.deleteSelection.label, tools.deleteSelection.icon, () => {
+                        activeLayer.deleteSelection();
+                        fin();
+                        updateToolOptions();
+                    });
+                    toolOptionsPanel.appendChild(deleteButton);
                 }
             };
 
@@ -367,6 +419,7 @@
                     case "4": { e.preventDefault(); choicedTool = tools.dropper.label; break; }
                     case "5": { e.preventDefault(); choicedTool = tools.fill.label; break; }
                     case "6": { e.preventDefault(); choicedTool = tools.translate.label; break; }
+                    case "7": { e.preventDefault(); choicedTool = tools.select.label; break; }
                     case "e": { e.preventDefault(); isErasable = !isErasable; updateToolButtons(); break; }
                     case "f": { e.preventDefault(); isFlipped = !isFlipped; oekaki.flipped.value = isFlipped; updateToolButtons(); break; }
                     case "g": { e.preventDefault(); isGrid = !isGrid; oekakiContainer.classList.toggle('grid', isGrid); updateToolButtons(); break; }
@@ -382,6 +435,12 @@
                     }
                     case "c": {
                         e.preventDefault();
+                        if (activeLayer?.selection) {
+                            // 選択範囲があればそれを内部クリップボードへコピー
+                            const copy = activeLayer.copySelection();
+                            if (copy) internalClipboard = copy;
+                            break;
+                        }
                         let visible = false;
                         const bgLayer = oekaki
                             .getLayers()
@@ -398,20 +457,62 @@
                         await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
                         break;
                     }
+                    case "x": {
+                        // 選択範囲の切り取り
+                        if (!activeLayer?.editable || !activeLayer.selection) break;
+                        e.preventDefault();
+                        const copy = activeLayer.copySelection();
+                        if (copy) internalClipboard = copy;
+                        activeLayer.deleteSelection();
+                        fin();
+                        break;
+                    }
                 }
                 updateToolButtons();
             };
             window.addEventListener('keydown', handleKeyDown);
 
+            // 選択範囲用のショートカット（Ctrl不要）
+            window.addEventListener('keydown', (e) => {
+                if (!activeLayer?.editable || !activeLayer.selection) return;
+                if (e.key === 'Delete' || e.key === 'Backspace') {
+                    e.preventDefault();
+                    activeLayer.deleteSelection();
+                    fin();
+                    updateToolOptions();
+                } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    activeLayer.deselect();
+                    updateToolOptions();
+                } else if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+                    e.preventDefault();
+                    const step = isGrid ? oekaki.getDotSize() : (e.shiftKey ? 10 : 1);
+                    const dx = e.key === 'ArrowLeft' ? -step : e.key === 'ArrowRight' ? step : 0;
+                    const dy = e.key === 'ArrowUp' ? -step : e.key === 'ArrowDown' ? step : 0;
+                    activeLayer.moveSelection(dx, dy);
+                    fin();
+                    drawSelectionHandle();
+                }
+            });
+
             window.addEventListener('paste', async (e) => {
                 if (!activeLayer?.editable) return;
                 const imageItem = Array.from(e.clipboardData?.items || []).find(v => v.kind === "file" && v.type.startsWith("image/"));
-                if (!imageItem) return;
-                const blob = imageItem.getAsFile();
-                if (!blob) return;
-                const bitmap = await createImageBitmap(blob);
-                activeLayer.paste(bitmap);
-                activeLayer.trace();
+                let bitmap;
+                if (imageItem) {
+                    const blob = imageItem.getAsFile();
+                    if (!blob) return;
+                    bitmap = await createImageBitmap(blob);
+                } else if (internalClipboard) {
+                    // OSクリップボードに画像がない場合は内部クリップボード（選択範囲コピー）を貼り付け
+                    bitmap = internalClipboard;
+                } else {
+                    return;
+                }
+                activeLayer.paste(bitmap); // 貼り付け後、そのまま選択状態になる
+                fin();
+                updateToolOptions();
+                drawSelectionHandle();
             });
 
             const dropper = (x, y) => {
@@ -478,7 +579,7 @@
                 // ツールボタンの作成
                 toolPanel.innerHTML = '';
                 [
-                    tools.brush, tools.pen, tools.eraser, tools.dropper, tools.fill, tools.translate,
+                    tools.brush, tools.pen, tools.eraser, tools.dropper, tools.fill, tools.translate, tools.select,
                     separator,
                     tools.erasable, tools.flip, tools.grid,
                     separator,
@@ -550,6 +651,15 @@
                 let prevX = null;
                 let prevY = null;
                 let dropping = false;
+                let selectDragMode = null; // null | 'new' | 'move' | 'resize'
+                let selectStartX = 0;
+                let selectStartY = 0;
+                let selectAnchorX = 0; // resize時の固定される左上X
+                let selectAnchorY = 0; // resize時の固定される左上Y
+                let selectAccDx = 0; // move時のドットスナップ用の累積差分
+                let selectAccDy = 0;
+                let selectSnappedDx = 0;
+                let selectSnappedDy = 0;
 
                 oekaki.onDraw((x, y, buttons) => {
                     if (!activeLayer?.editable) return;
@@ -567,6 +677,59 @@
                             } else {
                                 activeLayer.translate(x - prevX, y - prevY);
                             }
+                        } else if (choicedTool === tools.select.label) {
+                            if (selectDragMode === null) {
+                                const sel = activeLayer.selection;
+                                if (sel && isNearSelectionHandle(sel, x, y)) {
+                                    selectDragMode = 'resize';
+                                    selectAnchorX = sel.x;
+                                    selectAnchorY = sel.y;
+                                } else if (sel && isInsideSelection(sel, x, y)) {
+                                    selectDragMode = 'move';
+                                    selectAccDx = 0;
+                                    selectAccDy = 0;
+                                    selectSnappedDx = 0;
+                                    selectSnappedDy = 0;
+                                } else {
+                                    selectDragMode = 'new';
+                                    selectStartX = x;
+                                    selectStartY = y;
+                                }
+                            }
+                            if (selectDragMode === 'move') {
+                                if (isGrid) {
+                                    // ドット基準でスナップしながら移動
+                                    const size = oekaki.getDotSize();
+                                    selectAccDx += x - prevX;
+                                    selectAccDy += y - prevY;
+                                    const snappedDx = Math.round(selectAccDx / size) * size;
+                                    const snappedDy = Math.round(selectAccDy / size) * size;
+                                    const dx = snappedDx - selectSnappedDx;
+                                    const dy = snappedDy - selectSnappedDy;
+                                    if (dx !== 0 || dy !== 0) {
+                                        activeLayer.moveSelection(dx, dy);
+                                        selectSnappedDx = snappedDx;
+                                        selectSnappedDy = snappedDy;
+                                    }
+                                } else {
+                                    activeLayer.moveSelection(x - prevX, y - prevY);
+                                }
+                            } else if (selectDragMode === 'resize') {
+                                let w = x - selectAnchorX;
+                                let h = y - selectAnchorY;
+                                if (isGrid) {
+                                    // ドット基準でサイズをスナップ
+                                    const size = oekaki.getDotSize();
+                                    w = Math.round(w / size) * size;
+                                    h = Math.round(h / size) * size;
+                                    w = Math.max(size, w);
+                                    h = Math.max(size, h);
+                                }
+                                activeLayer.resizeSelection(w, h);
+                            } else {
+                                activeLayer.select(selectStartX, selectStartY, x - selectStartX, y - selectStartY);
+                            }
+                            drawSelectionHandle();
                         } else {
                             const lerps = oekaki.lerp(x, y, prevX, prevY);
                             switch (choicedTool) {
@@ -596,17 +759,13 @@
                     prevY = y;
                 });
 
-                const fin = () => {
-                    if (activeLayer?.modified()) {
-                        activeLayer.trace();
-                        addRecentColors();
-                        updateToolOptions();
-                    }
-                };
-
                 oekaki.onDrawn((x, y, buttons) => {
                     prevX = null;
                     prevY = null;
+                    if (choicedTool === tools.select.label && selectDragMode !== null) {
+                        selectDragMode = null;
+                        updateToolOptions();
+                    }
                     if (!activeLayer?.editable) return;
                     if (choicedTool === tools.fill.label && !dropping) fill(x, y);
                     dropping = false;
@@ -615,6 +774,26 @@
 
                 oekaki.upperLayer.value.canvas.addEventListener('contextmenu', (e) => {
                     e.preventDefault();
+                });
+
+                // 選択ツールのカーソル切替＆ハンドル表示（ドラッグしていない時）
+                oekaki.upperLayer.value.canvas.addEventListener('pointermove', (e) => {
+                    if (choicedTool !== tools.select.label || selectDragMode !== null || e.buttons !== 0) return;
+                    const sel = activeLayer?.selection;
+                    const canvas = oekaki.upperLayer.value.canvas;
+                    if (!sel) {
+                        canvas.style.cursor = `url('${mdi2DataUrl(tools.select.icon)}') 3 21, auto`;
+                        return;
+                    }
+                    const [x, y] = oekaki.getXY(e);
+                    if (isNearSelectionHandle(sel, x, y)) {
+                        canvas.style.cursor = 'nwse-resize';
+                    } else if (isInsideSelection(sel, x, y)) {
+                        canvas.style.cursor = 'move';
+                    } else {
+                        canvas.style.cursor = `url('${mdi2DataUrl(tools.select.icon)}') 3 21, auto`;
+                    }
+                    drawSelectionHandle();
                 });
             };
 
