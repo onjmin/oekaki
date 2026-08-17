@@ -616,11 +616,15 @@ export class LayeredCanvas {
 		if (!this.editable) return;
 		clearSelection();
 		const { width, height } = image;
-		const ratio = Math.min(g_width / width, g_height / height);
+		const ratio = Math.min(1, Math.min(g_width / width, g_height / height));
 		const w = (width * ratio) | 0;
 		const h = (height * ratio) | 0;
-		const offsetX = (g_width - w) >> 1;
-		const offsetY = (g_height - h) >> 1;
+		let offsetX = (g_width - w) >> 1;
+		let offsetY = (g_height - h) >> 1;
+		if (g_dot_size && g_dot_size > 1) {
+			offsetX = Math.floor(offsetX / g_dot_size) * g_dot_size;
+			offsetY = Math.floor(offsetY / g_dot_size) * g_dot_size;
+		}
 		const base = this.ctx.getImageData(0, 0, g_width, g_height);
 		this.ctx.drawImage(image, offsetX, offsetY, w, h);
 		const floating = document.createElement("canvas");
@@ -633,6 +637,9 @@ export class LayeredCanvas {
 		g_sel_rect = { x: offsetX, y: offsetY, w, h };
 		g_sel_floating = floating;
 		g_sel_base = base;
+		if (g_dot_size && g_dot_size > 1) {
+			g_sel_pixelated = true;
+		}
 		drawMarquee();
 	}
 	/**
