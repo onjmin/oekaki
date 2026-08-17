@@ -626,7 +626,12 @@ export class LayeredCanvas {
 			offsetY = Math.floor(offsetY / g_dot_size) * g_dot_size;
 		}
 		const base = this.ctx.getImageData(0, 0, g_width, g_height);
+		this.ctx.save();
+		if (g_dot_size && g_dot_size > 1) {
+			this.ctx.imageSmoothingEnabled = false;
+		}
 		this.ctx.drawImage(image, offsetX, offsetY, w, h);
+		this.ctx.restore();
 		const floating = document.createElement("canvas");
 		floating.width = width;
 		floating.height = height;
@@ -1011,7 +1016,16 @@ export class LayeredCanvas {
 		const ctx = copy.getContext("2d");
 		if (!ctx) return null;
 		if (g_sel_floating) {
-			ctx.drawImage(g_sel_floating, 0, 0, w, h);
+			ctx.imageSmoothingEnabled = !g_sel_pixelated;
+			if (g_sel_angle !== 0) {
+				ctx.save();
+				ctx.translate(w / 2, h / 2);
+				ctx.rotate((g_sel_angle * Math.PI) / 180);
+				ctx.drawImage(g_sel_floating, -w / 2, -h / 2, w, h);
+				ctx.restore();
+			} else {
+				ctx.drawImage(g_sel_floating, 0, 0, w, h);
+			}
 		} else {
 			ctx.drawImage(this.canvas, x, y, w, h, 0, 0, w, h);
 			if (g_sel_mask) {
