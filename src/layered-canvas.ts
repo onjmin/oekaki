@@ -434,6 +434,32 @@ export type LayeredCanvasMeta = {
 };
 
 /**
+ * 合成をやり直す範囲
+ */
+type Rect = { minX: number; minY: number; maxX: number; maxY: number };
+
+/**
+ * 描いている最中のひと筆
+ */
+type Stroke = {
+	/** ひと筆ぶんを溜める一時キャンバス */
+	canvas: HTMLCanvasElement;
+	ctx: CanvasRenderingContext2D;
+	mode: "draw" | "erase";
+	/**
+	 * ひと筆を始めた時点のレイヤー内容
+	 *
+	 * 描いている間のレイヤーは「これ＋溜めている筆」を映す下書きなので、
+	 * 最後に1回だけ合成する時も、まずここへ戻してから重ねる
+	 */
+	base: HTMLCanvasElement;
+	/** 前回の表示更新より後に筆が落ちた範囲 */
+	dirty: Rect | null;
+	/** 表示更新待ちのrequestAnimationFrame */
+	raf: number | null;
+};
+
+/**
  * レイヤークラス
  */
 export class LayeredCanvas {
@@ -480,11 +506,7 @@ export class LayeredCanvas {
 	 * ひと筆ぶんをここへ溜めて、離した瞬間に不透明度を掛けて1回だけ合成する。
 	 * 筆が重なった所だけ濃くなる事故を防ぐため
 	 */
-	#stroke: {
-		canvas: HTMLCanvasElement;
-		ctx: CanvasRenderingContext2D;
-		mode: "draw" | "erase";
-	} | null = null;
+	#stroke: Stroke | null = null;
 	/**
 	 * 使用済みレイヤー
 	 */
@@ -1180,6 +1202,7 @@ export class LayeredCanvas {
 		const _y = Math.floor(y / size) * size;
 		ctx.fillRect(_x, _y, size, size);
 		ctx.restore();
+		this.#scheduleStrokePaint(_x, _y, _x + size, _y + size);
 	}
 	/**
 	 * ひと筆の開始
@@ -1196,7 +1219,13 @@ export class LayeredCanvas {
 		canvas.height = this.canvas.height;
 		const ctx = canvas.getContext("2d", { willReadFrequently: true });
 		if (!ctx) return;
-		this.#stroke = { canvas, ctx, mode };
+		const base = document.createElement("canvas");
+		base.width = this.canvas.width;
+		base.height = this.canvas.height;
+		const baseCtx = base.getContext("2d");
+		if (!baseCtx) return;
+		baseCtx.drawImage(this.canvas, 0, 0);
+		this.#stroke = { canvas, ctx, mode, base, dirty: null, raf: null };
 	}
 	/**
 	 * ひと筆の終了。溜めた内容を不透明度と透明ロックを効かせて1回だけ合成する
@@ -1207,18 +1236,87 @@ export class LayeredCanvas {
 		const stroke = this.#stroke;
 		this.#stroke = null;
 		if (!stroke) return;
+		if (stroke.raf !== null) cancelAnimationFrame(stroke.raf);
+		// 描いている間の見た目は下書きなので、全面をひと筆の開始時点へ戻してから合成し直す
+		this.#composeStroke(stroke);
+	}
+	/**
+	 * ひと筆を始めた時点のレイヤーへ戻してから、溜めた筆を重ねる
+	 *
+	 * 不透明度と透明ロックはここで1回だけ効く。矩形を渡すとその範囲だけやり直す
+	 * （範囲外は溜めた筆が変わっていないので、合成し直しても同じ絵になる）
+	 */
+	#composeStroke(stroke: Stroke, rect?: Rect) {
+		const w = this.canvas.width;
+		const h = this.canvas.height;
+		const x = rect ? Math.max(0, Math.floor(rect.minX)) : 0;
+		const y = rect ? Math.max(0, Math.floor(rect.minY)) : 0;
+		const right = rect ? Math.min(w, Math.ceil(rect.maxX)) : w;
+		const bottom = rect ? Math.min(h, Math.ceil(rect.maxY)) : h;
+		const rw = right - x;
+		const rh = bottom - y;
+		if (rw <= 0 || rh <= 0) return;
+		this.ctx.save();
+		this.ctx.globalAlpha = 1;
+		this.ctx.globalCompositeOperation = "source-over";
+		this.ctx.clearRect(x, y, rw, rh);
+		this.ctx.drawImage(stroke.base, x, y, rw, rh, x, y, rw, rh);
+		this.ctx.restore();
 		const alpha = Math.min(100, Math.max(0, opacity.value)) / 100;
 		if (alpha === 0) return;
 		this.ctx.save();
 		this.ctx.globalAlpha = alpha;
+		// destination-outもsource-atopも、描いていない画素には手を出さないので
+		// 矩形の外は元のまま残る
 		this.ctx.globalCompositeOperation =
 			stroke.mode === "erase"
 				? "destination-out"
 				: this.alphaLocked
 					? "source-atop"
 					: "source-over";
-		this.ctx.drawImage(stroke.canvas, 0, 0);
+		this.ctx.drawImage(stroke.canvas, x, y, rw, rh, x, y, rw, rh);
 		this.ctx.restore();
+	}
+	/**
+	 * 描いている途中の見た目を更新する
+	 *
+	 * ひと筆は一時キャンバスへ溜めるので、こうして下書きを映さないと
+	 * 指を離すまで画面に何も出てこない
+	 */
+	#paintStroke() {
+		const stroke = this.#stroke;
+		if (!stroke) return;
+		if (stroke.raf !== null) {
+			cancelAnimationFrame(stroke.raf);
+			stroke.raf = null;
+		}
+		const dirty = stroke.dirty;
+		stroke.dirty = null;
+		if (!dirty) return;
+		this.#composeStroke(stroke, dirty);
+	}
+	/**
+	 * 筆が落ちた範囲を覚えて、見た目の更新を次のフレームまで待つ
+	 *
+	 * 筆はpointermove1回につき何十回も落ちるので、都度貼り直すと重い
+	 */
+	#scheduleStrokePaint(minX: number, minY: number, maxX: number, maxY: number) {
+		const stroke = this.#stroke;
+		if (!stroke) return;
+		const dirty = stroke.dirty;
+		stroke.dirty = dirty
+			? {
+					minX: Math.min(dirty.minX, minX),
+					minY: Math.min(dirty.minY, minY),
+					maxX: Math.max(dirty.maxX, maxX),
+					maxY: Math.max(dirty.maxY, maxY),
+				}
+			: { minX, minY, maxX, maxY };
+		if (stroke.raf !== null) return;
+		stroke.raf = requestAnimationFrame(() => {
+			stroke.raf = null;
+			if (this.#stroke === stroke) this.#paintStroke();
+		});
 	}
 	/**
 	 * ストローク中かどうか
@@ -1278,15 +1376,22 @@ export class LayeredCanvas {
 	erase(x: number, y: number) {
 		if (!this.editable) return;
 		const ctx = this.#brushCtx;
+		const radius = eraserSize.value / 2;
 		ctx.save();
 		// ストローク中は「消す形」を白で溜めて、endStrokeでdestination-outする
 		if (this.#stroke) {
-			this.#stamp(ctx, x, y, eraserSize.value / 2, "#ffffff");
+			this.#stamp(ctx, x, y, radius, "#ffffff");
 		} else {
 			this.#applyDirectMode(ctx, true);
-			this.#stamp(ctx, x, y, eraserSize.value / 2, "#ffffff");
+			this.#stamp(ctx, x, y, radius, "#ffffff");
 		}
 		ctx.restore();
+		this.#scheduleStrokePaint(
+			x - radius - 1,
+			y - radius - 1,
+			x + radius + 1,
+			y + radius + 1,
+		);
 	}
 	/**
 	 * ペン
@@ -1301,6 +1406,12 @@ export class LayeredCanvas {
 		const radius = size >> 1;
 		ctx.fillRect(x - radius, y - radius, size, size);
 		ctx.restore();
+		this.#scheduleStrokePaint(
+			x - radius,
+			y - radius,
+			x - radius + size,
+			y - radius + size,
+		);
 	}
 	/**
 	 * ブラシ
@@ -1311,6 +1422,14 @@ export class LayeredCanvas {
 	drawLine(fromX: number, fromY: number, toX: number, toY: number) {
 		if (!this.editable) return;
 		const ctx = this.#brushCtx;
+		// 線分の外接矩形を太さぶん広げたもの。丸い端も含めてここに収まる
+		const margin = Math.max(0.5, brushSize.value / 2) + 1;
+		const bounds = {
+			minX: Math.min(fromX, toX) - margin,
+			minY: Math.min(fromY, toY) - margin,
+			maxX: Math.max(fromX, toX) + margin,
+			maxY: Math.max(fromY, toY) + margin,
+		};
 		ctx.save();
 		this.#applyDirectMode(ctx, false);
 		const soft = Math.min(100, Math.max(0, softness.value)) / 100;
@@ -1324,6 +1443,12 @@ export class LayeredCanvas {
 			ctx.lineTo(toX, toY);
 			ctx.stroke();
 			ctx.restore();
+			this.#scheduleStrokePaint(
+				bounds.minX,
+				bounds.minY,
+				bounds.maxX,
+				bounds.maxY,
+			);
 			return;
 		}
 		const radius = Math.max(0.5, brushSize.value / 2);
@@ -1337,6 +1462,12 @@ export class LayeredCanvas {
 			this.#stamp(ctx, fromX + dx * t, fromY + dy * t, radius, color.value);
 		}
 		ctx.restore();
+		this.#scheduleStrokePaint(
+			bounds.minX,
+			bounds.minY,
+			bounds.maxX,
+			bounds.maxY,
+		);
 	}
 }
 
