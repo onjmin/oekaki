@@ -2,7 +2,7 @@
 	"author": "onjmin",
 	"license": "MIT",
 	"name": "@onjmin/oekaki",
-	"version": "1.0.64",
+	"version": "1.0.65",
 	"description": "レイヤー概念があるお絵描きモジュール",
 	"homepage": "https://onjmin.github.io/oekaki",
 	"repository": {
