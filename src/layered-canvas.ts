@@ -49,6 +49,51 @@ export const penSize = new Config(16);
 export const eraserSize = new Config(32);
 
 /**
+ * 描画の不透明度[%]
+ *
+ * ストローク単位で効く。ひと筆の中で線が重なっても濃くならない
+ * （beginStroke〜endStrokeで1枚に溜めてから合成するため）
+ */
+export const opacity = new Config(100);
+
+/**
+ * ブラシの柔らかさ[%]
+ *
+ * 0なら従来どおりの硬い円。上げるほど縁が透明へ向かって減衰する
+ */
+export const softness = new Config(0);
+
+/**
+ * 同じ色のまま不透明度だけ0にしたCSSカラーを返す
+ *
+ * グラデーションの外側を`transparent`にすると、ブラウザによっては
+ * 黒へ向かって補間されて縁が黒ずむ。必ず同じRGBのまま透明にすること
+ */
+const toTransparent = (css: string): string => {
+	const hex = css.trim();
+	if (hex.startsWith("#")) {
+		const body = hex.slice(1);
+		const expand = (s: string) => Number.parseInt(s.repeat(2 / s.length), 16);
+		if (body.length === 3 || body.length === 4) {
+			const [r, g, b] = [...body.slice(0, 3)].map((c) => expand(c));
+			return `rgba(${r}, ${g}, ${b}, 0)`;
+		}
+		if (body.length === 6 || body.length === 8) {
+			const [r, g, b] = [0, 2, 4].map((i) =>
+				Number.parseInt(body.slice(i, i + 2), 16),
+			);
+			return `rgba(${r}, ${g}, ${b}, 0)`;
+		}
+	}
+	const m = hex.match(/^rgba?\(([^)]+)\)$/i);
+	if (m) {
+		const [r, g, b] = m[1].split(",").map((v) => Number.parseFloat(v));
+		return `rgba(${r}, ${g}, ${b}, 0)`;
+	}
+	return "rgba(0, 0, 0, 0)";
+};
+
+/**
  * 左右反転
  */
 export const flipped = new Config(false, () => {
@@ -380,6 +425,10 @@ export type LayeredCanvasMeta = {
 	visible: boolean;
 	opacity: number;
 	locked: boolean;
+	/**
+	 * 透明ロック。古い保存データには無いのでoptional
+	 */
+	alphaLocked?: boolean;
 	used: boolean;
 	uuid: string;
 };
@@ -419,6 +468,24 @@ export class LayeredCanvas {
 	 */
 	locked = false;
 	/**
+	 * 透明ロック
+	 *
+	 * 既に色が乗っている画素にしか描けなくなる。
+	 * ベタ塗りしてからロックすれば、影を塗ってもシルエットの外へはみ出さない
+	 */
+	alphaLocked = false;
+	/**
+	 * ストローク中の一時キャンバス
+	 *
+	 * ひと筆ぶんをここへ溜めて、離した瞬間に不透明度を掛けて1回だけ合成する。
+	 * 筆が重なった所だけ濃くなる事故を防ぐため
+	 */
+	#stroke: {
+		canvas: HTMLCanvasElement;
+		ctx: CanvasRenderingContext2D;
+		mode: "draw" | "erase";
+	} | null = null;
+	/**
 	 * 使用済みレイヤー
 	 */
 	used = false;
@@ -451,7 +518,18 @@ export class LayeredCanvas {
 	 */
 	get meta() {
 		const { name, index, hash, visible, opacity, locked, used, uuid } = this;
-		return { name, index, hash, visible, opacity, locked, used, uuid };
+		const alphaLocked = this.alphaLocked;
+		return {
+			name,
+			index,
+			hash,
+			visible,
+			opacity,
+			locked,
+			alphaLocked,
+			used,
+			uuid,
+		};
 	}
 	/**
 	 * ストレージなどに一時保存可能なレイヤー情報
@@ -463,6 +541,7 @@ export class LayeredCanvas {
 		this.visible = meta.visible;
 		this.opacity = meta.opacity;
 		this.locked = meta.locked;
+		this.alphaLocked = meta.alphaLocked ?? false;
 		this.used = meta.used;
 		this.uuid = meta.uuid;
 	}
@@ -1092,45 +1171,172 @@ export class LayeredCanvas {
 	 */
 	drawByDot(x: number, y: number) {
 		if (!this.editable) return;
-		this.ctx.fillStyle = color.value;
+		const ctx = this.#brushCtx;
+		ctx.save();
+		this.#applyDirectMode(ctx, false);
+		ctx.fillStyle = color.value;
 		const size = g_dot_size;
 		const _x = Math.floor(x / size) * size;
 		const _y = Math.floor(y / size) * size;
-		this.ctx.fillRect(_x, _y, size, size);
+		ctx.fillRect(_x, _y, size, size);
+		ctx.restore();
+	}
+	/**
+	 * ひと筆の開始
+	 *
+	 * 呼ばなくても描けるが、呼んだ場合だけ
+	 * 「不透明度はストローク全体に1回だけ掛かる」「柔らかいブラシの重なりが濃くならない」
+	 * という塗りらしい挙動になる。pointerdownで呼ぶこと
+	 */
+	beginStroke(mode: "draw" | "erase" = "draw") {
+		if (!this.editable) return;
+		if (this.#stroke) this.endStroke();
+		const canvas = document.createElement("canvas");
+		canvas.width = this.canvas.width;
+		canvas.height = this.canvas.height;
+		const ctx = canvas.getContext("2d", { willReadFrequently: true });
+		if (!ctx) return;
+		this.#stroke = { canvas, ctx, mode };
+	}
+	/**
+	 * ひと筆の終了。溜めた内容を不透明度と透明ロックを効かせて1回だけ合成する
+	 *
+	 * pointerupで呼ぶこと。trace()より前に呼ぶ
+	 */
+	endStroke() {
+		const stroke = this.#stroke;
+		this.#stroke = null;
+		if (!stroke) return;
+		const alpha = Math.min(100, Math.max(0, opacity.value)) / 100;
+		if (alpha === 0) return;
+		this.ctx.save();
+		this.ctx.globalAlpha = alpha;
+		this.ctx.globalCompositeOperation =
+			stroke.mode === "erase"
+				? "destination-out"
+				: this.alphaLocked
+					? "source-atop"
+					: "source-over";
+		this.ctx.drawImage(stroke.canvas, 0, 0);
+		this.ctx.restore();
+	}
+	/**
+	 * ストローク中かどうか
+	 */
+	get stroking() {
+		return this.#stroke !== null;
+	}
+	/**
+	 * 実際に筆が落ちる先。ストローク中なら一時キャンバス
+	 */
+	get #brushCtx() {
+		return this.#stroke ? this.#stroke.ctx : this.ctx;
+	}
+	/**
+	 * ストロークを使っていない時に、その場で不透明度と透明ロックを効かせる
+	 */
+	#applyDirectMode(ctx: CanvasRenderingContext2D, erase: boolean) {
+		if (this.#stroke) return; // 合成はendStrokeでまとめてやる
+		ctx.globalAlpha = Math.min(100, Math.max(0, opacity.value)) / 100;
+		ctx.globalCompositeOperation = erase
+			? "destination-out"
+			: this.alphaLocked
+				? "source-atop"
+				: "source-over";
+	}
+	/**
+	 * ブラシの円を1つ押す（スタンプ）
+	 */
+	#stamp(
+		ctx: CanvasRenderingContext2D,
+		x: number,
+		y: number,
+		radius: number,
+		fill: string,
+	) {
+		const soft = Math.min(100, Math.max(0, softness.value)) / 100;
+		if (soft <= 0) {
+			ctx.fillStyle = fill;
+			ctx.beginPath();
+			ctx.arc(x, y, radius, 0, Math.PI * 2);
+			ctx.fill();
+			return;
+		}
+		// 中心は不透明、外側soft%ぶんを透明へ落とす
+		const inner = radius * (1 - soft);
+		const gradient = ctx.createRadialGradient(x, y, inner, x, y, radius);
+		gradient.addColorStop(0, fill);
+		gradient.addColorStop(1, toTransparent(fill));
+		ctx.fillStyle = gradient;
+		ctx.beginPath();
+		ctx.arc(x, y, radius, 0, Math.PI * 2);
+		ctx.fill();
 	}
 	/**
 	 * 消しゴム
 	 */
 	erase(x: number, y: number) {
 		if (!this.editable) return;
-		this.ctx.globalCompositeOperation = "destination-out";
-		this.ctx.beginPath();
-		this.ctx.arc(x, y, eraserSize.value >> 1, 0, Math.PI * 2);
-		this.ctx.fill();
-		this.ctx.globalCompositeOperation = "source-over";
+		const ctx = this.#brushCtx;
+		ctx.save();
+		// ストローク中は「消す形」を白で溜めて、endStrokeでdestination-outする
+		if (this.#stroke) {
+			this.#stamp(ctx, x, y, eraserSize.value / 2, "#ffffff");
+		} else {
+			this.#applyDirectMode(ctx, true);
+			this.#stamp(ctx, x, y, eraserSize.value / 2, "#ffffff");
+		}
+		ctx.restore();
 	}
 	/**
 	 * ペン
 	 */
 	draw(x: number, y: number) {
 		if (!this.editable) return;
-		this.ctx.fillStyle = color.value;
+		const ctx = this.#brushCtx;
+		ctx.save();
+		this.#applyDirectMode(ctx, false);
+		ctx.fillStyle = color.value;
 		const size = penSize.value;
 		const radius = size >> 1;
-		this.ctx.fillRect(x - radius, y - radius, size, size);
+		ctx.fillRect(x - radius, y - radius, size, size);
+		ctx.restore();
 	}
 	/**
 	 * ブラシ
+	 *
+	 * softnessが0なら従来どおり1本の実線を引く。
+	 * 0より大きいときは線分に沿って柔らかい円を並べる
 	 */
 	drawLine(fromX: number, fromY: number, toX: number, toY: number) {
 		if (!this.editable) return;
-		this.ctx.strokeStyle = color.value;
-		this.ctx.lineWidth = brushSize.value;
-		this.ctx.lineCap = "round";
-		this.ctx.beginPath();
-		this.ctx.moveTo(fromX, fromY);
-		this.ctx.lineTo(toX, toY);
-		this.ctx.stroke();
+		const ctx = this.#brushCtx;
+		ctx.save();
+		this.#applyDirectMode(ctx, false);
+		const soft = Math.min(100, Math.max(0, softness.value)) / 100;
+		if (soft <= 0) {
+			ctx.strokeStyle = color.value;
+			ctx.lineWidth = brushSize.value;
+			ctx.lineCap = "round";
+			ctx.lineJoin = "round";
+			ctx.beginPath();
+			ctx.moveTo(fromX, fromY);
+			ctx.lineTo(toX, toY);
+			ctx.stroke();
+			ctx.restore();
+			return;
+		}
+		const radius = Math.max(0.5, brushSize.value / 2);
+		const dx = toX - fromX;
+		const dy = toY - fromY;
+		const distance = Math.hypot(dx, dy);
+		const step = Math.max(0.5, radius * 0.25);
+		const count = Math.max(1, Math.ceil(distance / step));
+		for (let i = 0; i <= count; i++) {
+			const t = i / count;
+			this.#stamp(ctx, fromX + dx * t, fromY + dy * t, radius, color.value);
+		}
+		ctx.restore();
 	}
 }
 
