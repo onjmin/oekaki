@@ -217,3 +217,114 @@ export const paintMask = (
 	}
 	return data;
 };
+
+/**
+ * 塗り範囲の画素を、塗り始めの点から近い順に並べる
+ *
+ * バケツを一瞬で塗らず、波が広がるように見せるためのもの。
+ * 線に隙間があると、そこから外へ漏れていく様子が目で追える
+ *
+ * 近さは`core`（膨らませる前の塗り範囲）の中を歩いた距離。上下左右と斜めを1段ごとに
+ * 交互に使うので、波の形はひし形でも正方形でもなく八角形に近くなる。
+ * 「はみ出し」で膨らませた縁は波を伝えない。細い線は両側の縁が線の中で出会って
+ * つながってしまうので、そこを通すと波が線をすり抜けて見える
+ *
+ * @param mask 塗る範囲（`floodFillMask`の戻り値）
+ * @param core 膨らませる前の範囲（`grow: 0`で求めたもの）。省略時は`mask`
+ * @returns `order`は画素の添え字（`y * width + x`）を近い順に並べたもの。
+ * `levels[d]`は距離`d`の画素が`order`のどこから始まるか（末尾は`order.length`）
+ */
+export const fillRevealOrder = (
+	mask: Uint8Array,
+	width: number,
+	height: number,
+	startX: number,
+	startY: number,
+	core: Uint8Array = mask,
+): { order: Int32Array; levels: number[] } => {
+	const size = width * height;
+	const level = new Int32Array(size).fill(-1);
+	// 波は core の中だけを伝わる
+	const queue = new Int32Array(size);
+	let tail = 0;
+	const x0 = Math.min(width - 1, Math.max(0, Math.floor(startX)));
+	const y0 = Math.min(height - 1, Math.max(0, Math.floor(startY)));
+	const seed = y0 * width + x0;
+	if (core[seed] && mask[seed]) {
+		level[seed] = 0;
+		queue[tail++] = seed;
+	}
+	let maxLevel = 0;
+	for (let head = 0; head < tail; head++) {
+		const i = queue[head];
+		const d = level[i];
+		const diagonal = d % 2 === 1;
+		const x = i % width;
+		const y = (i - x) / width;
+		for (let dy = -1; dy <= 1; dy++) {
+			const ny = y + dy;
+			if (ny < 0 || ny >= height) continue;
+			for (let dx = -1; dx <= 1; dx++) {
+				if (dx === 0 && dy === 0) continue;
+				if (!diagonal && dx !== 0 && dy !== 0) continue;
+				const nx = x + dx;
+				if (nx < 0 || nx >= width) continue;
+				const n = ny * width + nx;
+				if (!core[n] || !mask[n] || level[n] !== -1) continue;
+				level[n] = d + 1;
+				if (d + 1 > maxLevel) maxLevel = d + 1;
+				queue[tail++] = n;
+			}
+		}
+	}
+	// 膨らませた縁は、隣まで波が来た次の段で塗る（そこから先へは伝えない）
+	let frontier: number[] = [];
+	for (let k = 0; k < tail; k++) frontier.push(queue[k]);
+	while (frontier.length > 0) {
+		const next: number[] = [];
+		for (const i of frontier) {
+			const x = i % width;
+			const d = level[i] + 1;
+			const neighbors = [
+				x > 0 ? i - 1 : -1,
+				x < width - 1 ? i + 1 : -1,
+				i - width,
+				i + width,
+			];
+			for (const n of neighbors) {
+				if (n < 0 || n >= size || !mask[n] || core[n]) continue;
+				if (level[n] !== -1 && level[n] <= d) continue;
+				if (level[n] === -1) next.push(n);
+				level[n] = d;
+				if (d > maxLevel) maxLevel = d;
+			}
+		}
+		frontier = next;
+	}
+	// 始点から辿れない画素（普通は無い）は最後にまとめて出す
+	let stray = false;
+	for (let i = 0; i < size; i++) {
+		if (mask[i] && level[i] === -1) {
+			level[i] = maxLevel + 1;
+			stray = true;
+		}
+	}
+	if (stray) maxLevel++;
+	// 段ごとに数えて並べる
+	const levels = new Array<number>(maxLevel + 2).fill(0);
+	let total = 0;
+	for (let i = 0; i < size; i++) {
+		if (level[i] === -1) continue;
+		levels[level[i] + 1]++;
+		total++;
+	}
+	if (total === 0) return { order: new Int32Array(0), levels: [0] };
+	for (let d = 1; d < levels.length; d++) levels[d] += levels[d - 1];
+	const order = new Int32Array(total);
+	const cursor = levels.slice(0, -1);
+	for (let i = 0; i < size; i++) {
+		if (level[i] === -1) continue;
+		order[cursor[level[i]]++] = i;
+	}
+	return { order, levels };
+};

@@ -1,3 +1,4 @@
+import { fillRevealOrder } from "./flood-fill.js";
 import { LinkedList } from "./linked-list.js";
 
 let g_layer_container: HTMLElement | null = null;
@@ -460,6 +461,44 @@ type Stroke = {
 };
 
 /**
+ * バケツの塗りを広げて見せている最中の演出
+ */
+type Reveal = {
+	/** レイヤーの上にかぶせる演出用のキャンバス */
+	canvas: HTMLCanvasElement;
+	ctx: CanvasRenderingContext2D;
+	/** かぶせ板の今の中身。塗る前の絵から始まり、塗った後の絵の画素を近い順に写していく */
+	image: ImageData;
+	/** 塗った後の絵 */
+	after: Uint8ClampedArray;
+	order: Int32Array;
+	levels: number[];
+	/** `order`のどこまで写したか */
+	shown: number;
+	start: number;
+	duration: number;
+	raf: number | null;
+	timer: ReturnType<typeof setTimeout> | null;
+};
+
+/**
+ * バケツの塗りを広げて見せる速さ
+ */
+export type RevealFillOptions = {
+	/** 1ミリ秒に何画素ぶん広がるか。既定1 */
+	speed?: number;
+	/** どんなに広くてもこの時間で塗り終える[ms]。既定700 */
+	maxDuration?: number;
+	/**
+	 * 膨らませる前の塗り範囲（`floodFillMask`を`grow: 0`で呼んだもの）
+	 *
+	 * 「はみ出し」を使うなら渡すこと。渡さないと、細い線の両側から膨らんだ縁が
+	 * 線の中でつながって、波が線をすり抜けて見える
+	 */
+	core?: Uint8Array;
+};
+
+/**
  * レイヤークラス
  */
 export class LayeredCanvas {
@@ -507,6 +546,12 @@ export class LayeredCanvas {
 	 * 筆が重なった所だけ濃くなる事故を防ぐため
 	 */
 	#stroke: Stroke | null = null;
+	/**
+	 * バケツの塗りを広げて見せている最中の演出
+	 *
+	 * レイヤー本体（と履歴）はもう塗り終わっていて、上にかぶせた板が見た目だけを遅らせている
+	 */
+	#reveal: Reveal | null = null;
 	/**
 	 * 使用済みレイヤー
 	 */
@@ -571,6 +616,7 @@ export class LayeredCanvas {
 	 * レイヤーの削除
 	 */
 	delete() {
+		this.finishReveal();
 		this.deselect();
 		g_layers[this.index] = null; // 欠番
 		this.canvas.remove();
@@ -593,6 +639,7 @@ export class LayeredCanvas {
 	 * レイヤーの入れ替え
 	 */
 	swap(to: number) {
+		this.finishReveal();
 		const from = this.index;
 		if (to === from) return;
 		const that = g_layers[to];
@@ -614,6 +661,7 @@ export class LayeredCanvas {
 	 * レイヤーの可視性
 	 */
 	set visible(visible: boolean) {
+		this.finishReveal();
 		this.#visible = visible;
 		this.canvas.style.visibility = this.#visible ? "visible" : "hidden";
 	}
@@ -633,6 +681,7 @@ export class LayeredCanvas {
 	 * レイヤーの不透明度[%] 0-100
 	 */
 	set opacity(opacity: number) {
+		this.finishReveal();
 		this.#opacity = opacity;
 		this.canvas.style.opacity = `${opacity}%`;
 	}
@@ -646,6 +695,7 @@ export class LayeredCanvas {
 	 * レイヤーのUint8ClampedArray
 	 */
 	set data(data: Uint8ClampedArray) {
+		this.finishReveal();
 		const imageData = this.ctx.createImageData(g_width, g_height);
 		imageData.data.set(data);
 		this.ctx.putImageData(imageData, 0, 0);
@@ -672,6 +722,7 @@ export class LayeredCanvas {
 	 * レイヤーの描画履歴を1つ戻す
 	 */
 	undo() {
+		this.finishReveal();
 		if (!this.editable) return;
 		const data = this.history.undo();
 		if (!data) return;
@@ -681,6 +732,7 @@ export class LayeredCanvas {
 	 * レイヤーの描画履歴を1つ進める
 	 */
 	redo() {
+		this.finishReveal();
 		if (!this.editable) return;
 		const data = this.history.redo();
 		if (!data) return;
@@ -690,6 +742,7 @@ export class LayeredCanvas {
 	 * 全消し
 	 */
 	clear() {
+		this.finishReveal();
 		if (!this.editable) return;
 		this.ctx.clearRect(0, 0, g_width, g_height);
 	}
@@ -1212,6 +1265,7 @@ export class LayeredCanvas {
 	 * という塗りらしい挙動になる。pointerdownで呼ぶこと
 	 */
 	beginStroke(mode: "draw" | "erase" = "draw") {
+		this.finishReveal();
 		if (!this.editable) return;
 		if (this.#stroke) this.endStroke();
 		const canvas = document.createElement("canvas");
@@ -1317,6 +1371,139 @@ export class LayeredCanvas {
 			stroke.raf = null;
 			if (this.#stroke === stroke) this.#paintStroke();
 		});
+	}
+	/**
+	 * バケツの塗りを、塗り始めの点から波のように広げて見せる
+	 *
+	 * 見た目だけの演出。呼ぶ前にレイヤーへ塗り終えた絵を入れて`trace()`しておくこと
+	 * （履歴には塗り終えた絵が1回だけ残る）。演出中もレイヤー本体と`data`・`render()`は
+	 * 塗り終えた絵なので、保存や書き出しが途中の絵を拾うことはない。
+	 * 線の隙間から外へ漏れたとき、どこから漏れたかを目で追えるようにするためのもの
+	 *
+	 * @param before 塗る前のレイヤー内容
+	 * @param mask `floodFillMask`が返した範囲
+	 */
+	revealFill(
+		before: Uint8ClampedArray,
+		mask: Uint8Array,
+		startX: number,
+		startY: number,
+		options: RevealFillOptions = {},
+	) {
+		this.finishReveal();
+		const w = this.canvas.width;
+		const h = this.canvas.height;
+		const { order, levels } = fillRevealOrder(
+			mask,
+			w,
+			h,
+			startX,
+			startY,
+			options.core,
+		);
+		const steps = levels.length - 1;
+		const speed = Math.max(0.01, options.speed ?? 1);
+		const duration = Math.min(options.maxDuration ?? 700, steps / speed);
+		if (order.length === 0 || duration < 34) return; // 2フレームも無いなら出さない
+		const canvas = document.createElement("canvas");
+		canvas.width = w;
+		canvas.height = h;
+		const ctx = canvas.getContext("2d");
+		if (!ctx) return;
+		const image = ctx.createImageData(w, h);
+		image.data.set(before);
+		ctx.putImageData(image, 0, 0);
+		// レイヤーと同じ重なり順・見た目でかぶせて、本体は隠す
+		canvas.style.cssText = this.canvas.style.cssText;
+		canvas.style.pointerEvents = "none";
+		canvas.style.visibility = "visible";
+		this.canvas.after(canvas);
+		this.canvas.style.visibility = "hidden";
+		const reveal: Reveal = {
+			canvas,
+			ctx,
+			image,
+			after: this.data,
+			order,
+			levels,
+			shown: 0,
+			start: performance.now(),
+			duration,
+			raf: null,
+			timer: null,
+		};
+		this.#reveal = reveal;
+		const tick = () => {
+			if (this.#reveal !== reveal) return;
+			const t = (performance.now() - reveal.start) / reveal.duration;
+			if (t >= 1) {
+				this.finishReveal();
+				return;
+			}
+			this.#showReveal(reveal, reveal.levels[Math.floor(t * steps)]);
+			reveal.raf = requestAnimationFrame(tick);
+		};
+		reveal.raf = requestAnimationFrame(tick);
+		// requestAnimationFrameが止まる環境（裏タブなど）でも必ず終わらせる
+		reveal.timer = setTimeout(() => this.finishReveal(), duration + 300);
+	}
+	/**
+	 * `order`の`until`番目の手前までを、塗った後の色に変える
+	 */
+	#showReveal(reveal: Reveal, until: number) {
+		const { order, after, image } = reveal;
+		const w = image.width;
+		const data = image.data;
+		let minX = Number.POSITIVE_INFINITY;
+		let minY = Number.POSITIVE_INFINITY;
+		let maxX = -1;
+		let maxY = -1;
+		for (let k = reveal.shown; k < until; k++) {
+			const i = order[k];
+			const j = i * 4;
+			data[j] = after[j];
+			data[j + 1] = after[j + 1];
+			data[j + 2] = after[j + 2];
+			data[j + 3] = after[j + 3];
+			const x = i % w;
+			const y = (i - x) / w;
+			if (x < minX) minX = x;
+			if (x > maxX) maxX = x;
+			if (y < minY) minY = y;
+			if (y > maxY) maxY = y;
+		}
+		reveal.shown = Math.max(reveal.shown, until);
+		if (maxX < 0) return;
+		reveal.ctx.putImageData(
+			image,
+			0,
+			0,
+			minX,
+			minY,
+			maxX - minX + 1,
+			maxY - minY + 1,
+		);
+	}
+	/**
+	 * 広げている最中の塗りを、その場で塗り終えた見た目にする
+	 *
+	 * 次の操作に入る前に呼ぶ。レイヤーの操作（描く・戻す・表示切替など）は自分で呼ぶので、
+	 * 外から呼ぶ必要があるのは、レイヤーを経由せずに`canvas`/`ctx`を直接触る時だけ
+	 */
+	finishReveal() {
+		const reveal = this.#reveal;
+		if (!reveal) return;
+		this.#reveal = null;
+		if (reveal.raf !== null) cancelAnimationFrame(reveal.raf);
+		if (reveal.timer !== null) clearTimeout(reveal.timer);
+		reveal.canvas.remove();
+		this.canvas.style.visibility = this.#visible ? "visible" : "hidden";
+	}
+	/**
+	 * バケツの塗りを広げて見せている最中かどうか
+	 */
+	get revealing() {
+		return this.#reveal !== null;
 	}
 	/**
 	 * ストローク中かどうか
