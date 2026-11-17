@@ -180,6 +180,10 @@ export const growMask = (
  * @param fillColor 塗る色
  * @param alpha 0〜1。1未満なら元の色と混ぜる
  * @param alphaLocked trueなら既に色がある画素にしか塗らない
+ * @param core 膨らませる前の範囲（`grow: 0`で求めたもの）。渡すと、膨らませた縁は
+ * 「塗る範囲にあった色」か透明の画素だけを塗り替え、それ以外（線画など）は**その下へ**塗る。
+ * 線画と同じレイヤーを塗ると、膨らませた縁が線を上から潰し、次のバケツでは潰した所まで
+ * 塗り範囲に入って、塗るたびに外周が一回りずつ広がっていたのを防ぐ
  */
 export const paintMask = (
 	data: Uint8ClampedArray,
@@ -187,16 +191,43 @@ export const paintMask = (
 	fillColor: RGBA,
 	alpha = 1,
 	alphaLocked = false,
+	core?: Uint8Array,
 ): Uint8ClampedArray => {
 	const a = Math.min(1, Math.max(0, alpha));
 	const [fr, fg, fb, fa] = fillColor;
 	const sourceAlpha = (fa / 255) * a;
 	if (sourceAlpha === 0) return data;
+	const view = new Uint32Array(data.buffer, data.byteOffset, data.length >> 2);
+	// 塗る範囲にもともとあった色。縁がこれと同じなら（前に塗った色の縁など）塗り替えてよい
+	let replaceable: Set<number> | null = null;
+	if (core) {
+		replaceable = new Set();
+		for (let i = 0; i < core.length; i++) if (core[i]) replaceable.add(view[i]);
+	}
 	for (let i = 0; i < mask.length; i++) {
 		if (!mask[i]) continue;
 		const index = i * 4;
 		const destinationAlpha = data[index + 3];
 		if (alphaLocked && destinationAlpha === 0) continue;
+		if (
+			replaceable &&
+			!core?.[i] &&
+			destinationAlpha > 0 &&
+			!replaceable.has(view[i])
+		) {
+			// 線画などの下へ塗る（destination-over）。不透明な線は見た目が変わらず、
+			// 半透明の縁（アンチエイリアス）の下だけが埋まる
+			const da = destinationAlpha / 255;
+			const under = sourceAlpha * (1 - da);
+			const outAlpha = da + under;
+			const behind = (source: number, destination: number) =>
+				(destination * da + source * under) / outAlpha;
+			data[index] = behind(fr, data[index]);
+			data[index + 1] = behind(fg, data[index + 1]);
+			data[index + 2] = behind(fb, data[index + 2]);
+			if (!alphaLocked) data[index + 3] = Math.round(outAlpha * 255);
+			continue;
+		}
 		if (sourceAlpha >= 1 && !alphaLocked) {
 			data[index] = fr;
 			data[index + 1] = fg;
