@@ -6,7 +6,7 @@
 export const lerp = (x: number, y: number, _x: number, _y: number) => {
 	const a = _x - x;
 	const b = _y - y;
-	const len = Math.max(...[a, b].map(Math.abs)) || 1;
+	const len = Math.ceil(Math.max(...[a, b].map(Math.abs))) || 1; // 小数のままだとnew Arrayが例外になる
 	const _a = a / len;
 	const _b = b / len;
 	return [...new Array(len).keys()].map((i) =>

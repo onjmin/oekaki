@@ -26,9 +26,13 @@ export const floodFill = (
 	};
 	const colorsMatch = (a: RGBA, b: RGBA): boolean =>
 		a.every((value, i) => value === b[i]);
-	const targetColor = getPixel(startX, startY);
+	// 小数だと画素が書けず、塗った印が付かないので終わらなくなる
+	const x0 = Math.floor(startX);
+	const y0 = Math.floor(startY);
+	if (x0 < 0 || y0 < 0 || x0 >= width || y0 >= height) return null;
+	const targetColor = getPixel(x0, y0);
 	if (colorsMatch(targetColor, fillColor)) return null;
-	const queue: [number, number][] = [[startX, startY]];
+	const queue: [number, number][] = [[x0, y0]];
 	while (queue.length > 0) {
 		const item = queue.pop();
 		if (!item) break;
@@ -235,12 +239,16 @@ export const paintMask = (
 			data[index + 3] = 255;
 			continue;
 		}
-		// source-over。透明ロック中は元のアルファを保つ
+		// source-over。透明ロック中は元のアルファを保つ（source-atop）
 		const da = destinationAlpha / 255;
 		const outAlpha = alphaLocked ? da : sourceAlpha + da * (1 - sourceAlpha);
 		if (outAlpha === 0) continue;
-		const blend = (source: number, destination: number) =>
-			(source * sourceAlpha + destination * da * (1 - sourceAlpha)) / outAlpha;
+		const blend = alphaLocked
+			? (source: number, destination: number) =>
+					source * sourceAlpha + destination * (1 - sourceAlpha)
+			: (source: number, destination: number) =>
+					(source * sourceAlpha + destination * da * (1 - sourceAlpha)) /
+					outAlpha;
 		data[index] = blend(fr, data[index]);
 		data[index + 1] = blend(fg, data[index + 1]);
 		data[index + 2] = blend(fb, data[index + 2]);

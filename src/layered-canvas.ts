@@ -119,7 +119,11 @@ export const setDotSize = (
 	maxDotCount = 64,
 	canvasLength = g_height,
 ) => {
-	g_dot_size = Math.floor(Math.floor(canvasLength / maxDotCount) * dotPenScale);
+	// 0になると*ByDot系の座標がNaNになる
+	g_dot_size = Math.max(
+		1,
+		Math.floor(Math.floor(canvasLength / maxDotCount) * dotPenScale),
+	);
 	resetTranslation();
 };
 
@@ -315,6 +319,7 @@ export const init = (mountTarget: HTMLElement, width = 640, height = 360) => {
 	layerContainer.style.display = "inline-block";
 	layerContainer.style.width = `${width}px`;
 	layerContainer.style.height = `${height}px`;
+	if (flipped.value) layerContainer.style.transform = "scaleX(-1)";
 	g_serial_number = 0;
 	g_sel_layer = null;
 	g_sel_rect = null;
@@ -341,7 +346,7 @@ export const getXY = (e: MouseEvent): [number, number, number] => {
 	const rect = g_upper.canvas.getBoundingClientRect();
 	let x = Math.floor(clientX - rect.left);
 	const y = Math.floor(clientY - rect.top);
-	if (flipped.value) x = g_width - x;
+	if (flipped.value) x = g_width - 1 - x; // 右端の画素が幅ちょうど（範囲外）にならないよう1引く
 	return [x, y, e.buttons];
 };
 
@@ -384,7 +389,7 @@ export const onDraw = (
 		"pointermove",
 		(e) => {
 			if (drawing) {
-				for (const ev of e.getCoalescedEvents()) {
+				for (const ev of e.getCoalescedEvents?.() ?? []) {
 					requestAnimationFrame(() => callback(...getXY(ev)));
 				}
 				requestAnimationFrame(() => callback(...getXY(e)));
@@ -405,15 +410,16 @@ let drawing = false;
 export const onDrawn = (
 	callback: (x: number, y: number, buttons: number) => void,
 ) => {
-	g_upper.canvas.addEventListener(
-		"pointerup",
-		(e) => {
+	const finish = (e: PointerEvent) => {
+		// キャプチャしていないpointerIdを離すと例外になる
+		if (g_upper.canvas.hasPointerCapture(e.pointerId))
 			g_upper.canvas.releasePointerCapture(e.pointerId);
-			drawing = false;
-			requestAnimationFrame(() => callback(...getXY(e)));
-		},
-		{ passive: true },
-	);
+		drawing = false;
+		requestAnimationFrame(() => callback(...getXY(e)));
+	};
+	g_upper.canvas.addEventListener("pointerup", finish, { passive: true });
+	// pointerupが来ないまま終わると、ボタンを離していても描き続けてしまう
+	g_upper.canvas.addEventListener("pointercancel", finish, { passive: true });
 };
 
 /**
@@ -1239,6 +1245,15 @@ export class LayeredCanvas {
 		const size = g_dot_size;
 		const _x = Math.floor(x / size) * size;
 		const _y = Math.floor(y / size) * size;
+		const stroke = this.#stroke;
+		if (stroke?.mode === "erase") {
+			// レイヤーを直接消すと、endStrokeで開始時点へ戻されて消した跡が残らない
+			stroke.ctx.fillStyle = "#ffffff";
+			stroke.ctx.fillRect(_x, _y, size, size);
+			this.#scheduleStrokePaint(_x, _y, _x + size, _y + size);
+			return;
+		}
+		stroke?.base.getContext("2d")?.clearRect(_x, _y, size, size);
 		this.ctx.clearRect(_x, _y, size, size);
 	}
 	/**
@@ -1391,6 +1406,7 @@ export class LayeredCanvas {
 		options: RevealFillOptions = {},
 	) {
 		this.finishReveal();
+		if (!this.#visible) return; // かぶせ板だけが見えてしまう
 		const w = this.canvas.width;
 		const h = this.canvas.height;
 		const { order, levels } = fillRevealOrder(
@@ -1682,11 +1698,13 @@ export const dropper = (
 	x: number,
 	y: number,
 ): [number, number, number, number] | null => {
+	const px = Math.floor(x);
+	const py = Math.floor(y);
+	// 範囲外は隣の行の画素やundefinedを拾ってしまう
+	if (!(px >= 0 && py >= 0 && px < g_width && py < g_height)) return null;
 	const ctx = render().getContext("2d", { willReadFrequently: true });
 	if (!ctx) return null;
-	const { data } = ctx.getImageData(0, 0, g_width, g_height);
-	const index = (y * g_width + x) * 4;
-	const [r, g, b, a] = data.subarray(index, index + 4);
+	const [r, g, b, a] = ctx.getImageData(px, py, 1, 1).data;
 	return [r, g, b, a];
 };
 
