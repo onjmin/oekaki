@@ -702,6 +702,8 @@ export class LayeredCanvas {
 	 */
 	set data(data: Uint8ClampedArray) {
 		this.finishReveal();
+		// 浮かせた選択範囲は差し替え前の絵を控えているので、残すと次の移動で古い絵に戻る
+		if (g_sel_layer === this && g_sel_floating) clearSelection();
 		const imageData = this.ctx.createImageData(g_width, g_height);
 		imageData.data.set(data);
 		this.ctx.putImageData(imageData, 0, 0);
